@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FCM Debug</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #000; color: #0f0; }
+        .log { margin: 5px 0; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .warning { color: #ff0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 FCM Debug Console</h1>
+    <div id="logs"></div>
+    
+    <script>
+        const logDiv = document.getElementById('logs');
+        
+        function log(msg, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logDiv.appendChild(div);
+            console.log(msg);
+        }
+        
+        log('🚀 Debug page loaded', 'success');
+        
+        // Проверяем AndroidBridge
+        if (typeof AndroidBridge !== 'undefined') {
+            log('✅ AndroidBridge EXISTS!', 'success');
+            
+            if (typeof AndroidBridge.registerFCMToken === 'function') {
+                log('✅ AndroidBridge.registerFCMToken method EXISTS!', 'success');
+            } else {
+                log('❌ AndroidBridge.registerFCMToken method NOT FOUND!', 'error');
+            }
+            
+            // Проверяем localStorage
+            const dashToken = localStorage.getItem('dash_token');
+            const instrToken = localStorage.getItem('instr_token');
+            
+            if (dashToken) {
+                log(`✅ dash_token found: ${dashToken.substring(0, 20)}...`, 'success');
+            } else {
+                log('⚠️ dash_token NOT found', 'warning');
+            }
+            
+            if (instrToken) {
+                log(`✅ instr_token found: ${instrToken.substring(0, 20)}...`, 'success');
+            } else {
+                log('⚠️ instr_token NOT found', 'warning');
+            }
+            
+            // Пробуем вызвать регистрацию
+            const token = dashToken || instrToken;
+            if (token) {
+                log('📞 Attempting to call AndroidBridge.registerFCMToken...', 'info');
+                try {
+                    AndroidBridge.registerFCMToken(token);
+                    log('✅ Call completed successfully!', 'success');
+                } catch (e) {
+                    log(`❌ Error: ${e.message}`, 'error');
+                }
+            } else {
+                log('❌ No auth token available - user not logged in', 'error');
+            }
+            
+        } else {
+            log('❌ AndroidBridge NOT FOUND - not running in Android app!', 'error');
+            log('ℹ️ This page must be opened in the Android app, not browser', 'warning');
+        }
+        
+        // Выводим все методы AndroidBridge
+        if (typeof AndroidBridge !== 'undefined') {
+            log('📋 AndroidBridge methods:', 'info');
+            for (let key in AndroidBridge) {
+                log(`  - ${key}: ${typeof AndroidBridge[key]}`, 'info');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Вход — Система инструктажей</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { display:flex; min-height:100svh; align-items:center; justify-content:center; background:#f6f7fb; margin:0; padding:16px; }
+    .card{ width:100%; max-width:360px; background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.08); padding:24px; }
+    h1{ font-size:20px; margin:0 0 16px;}
+    label{ display:block; font-size:12px; color:#555; margin:14px 0 6px;}
+    input{ width:100%; padding:12px 14px; border:1px solid #dfe3ec; border-radius:10px; font-size:16px; outline:none;} /* 16px чтобы iOS не зумил */
+    button{ width:100%; padding:12px 14px; border:0; border-radius:10px; background:#2563eb; color:#fff; font-weight:600; 
+            margin-top:16px; cursor:pointer; min-height:48px; font-size:16px;} /* Увеличена кнопка для тача */
+    button:disabled{ opacity:.6; cursor:not-allowed;}
+    button:active:not(:disabled){ background:#1d4ed8; } /* Обратная связь при клике */
+    .err{ color:#b91c1c; font-size:13px; margin-top:10px; min-height:18px;}
+    .muted{ color:#667085; font-size:12px; margin-top:12px; text-align:center;}
+    .divider{ border:none; border-top:1px solid #eef0f5; margin:16px 0 12px; }
+    .btn-qr{ display:block; width:100%; padding:10px 14px; border:1.5px solid #2563eb; border-radius:10px;
+             background:#fff; color:#2563eb; font-weight:600; cursor:pointer; font-size:14px;
+             text-align:center; text-decoration:none; transition:background .15s, color .15s; box-sizing:border-box; }
+    .btn-qr:hover{ background:#eff6ff; }
+    
+    @media (max-width:480px){
+      .card{ padding:20px; border-radius:12px; }
+      h1{ font-size:18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 id="title">Вход</h1>
+    <label>Логин</label>
+    <input id="user" autocomplete="username" />
+    <label>Пароль</label>
+    <input id="pass" type="password" autocomplete="current-password" />
+    <button id="btn">Войти</button>
+    <div class="err" id="err"></div>
+    <div class="muted">
+      Формат логина: <b>табельный_номер@организация</b><br>
+      (например: <b>0000@uos2</b>)
+    </div>
+    <hr class="divider">
+    <a href="./qr-upload.html" class="btn-qr">📄 QR-генератор документов</a>
+
+  </div>
+
+  <script>
+  const API = ""; // пусто = тот же origin
+
+  // Проверяем есть ли токены (любой) — перенаправляем сразу
+  if (localStorage.getItem('dash_token')) {
+    location.href = './dashboard.html';
+  } else if (localStorage.getItem('instr_token')) {
+    location.href = './инструктаж.html';
+  }
+
+  // Заголовок по умолчанию
+  const titleEl = document.getElementById('title');
+  titleEl.textContent = 'Вход в систему инструктажей';
+
+  const err = document.getElementById('err');
+  const btn = document.getElementById('btn');
+
+  let isLoggingIn = false;
+
+  btn.onclick = async () => {
+    if (isLoggingIn) return; // предотвращаем двойной клик
+    isLoggingIn = true;
+    err.textContent = ""; 
+    btn.disabled = true;
+
+    const login = document.getElementById('user').value.trim();
+    const password = document.getElementById('pass').value;
+
+    if (!login || !password) {
+      err.textContent = 'Заполните логин и пароль';
+      btn.disabled = false;
+      isLoggingIn = false;
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('username', login);
+    fd.append('password', password);
+
+    try {
+      const r = await fetch(API + '/api/auth/login', { method:'POST', body: fd });
+      if (!r.ok) {
+        const status = r.status;
+        if (status === 401 || status === 400) {
+          throw new Error('Неверный логин или пароль. Проверьте правильность данных.');
+        } else if (status === 404) {
+          throw new Error('Пользователь не найден. Проверьте формат логина (табельный@организация).');
+        } else {
+          throw new Error('Ошибка входа. Попробуйте позже или обратитесь к администратору.');
+        }
+      }
+      const data = await r.json();
+      const role = (data.role || '').toUpperCase();
+
+      // Определяем куда редиректить по роли
+      if (role === 'EMP' || role === 'EMPLOYEE') {
+        // Сотрудник → страница прохождения инструктажей
+        localStorage.setItem('instr_token', data.access_token);
+        location.replace('./инструктаж.html');
+      } else if (role === 'QR_UPLOADER') {
+        // QR-менеджер → страница QR-генератора
+        localStorage.setItem('qr_token', data.access_token);
+        location.replace('./qr-upload.html');
+      } else {
+        // Начальник/админ → дашборд
+        localStorage.setItem('dash_token', data.access_token);
+        location.replace('./dashboard.html');
+      }
+    } catch(e){
+      err.textContent = e.message || 'Ошибка входа';
+      btn.disabled = false;
+      isLoggingIn = false;
+    }
+  };
+</script>
+</body>
+</html>

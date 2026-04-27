@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Auth</title>
+</head>
+<body>
+  <h1>Тест авторизации для global_uat1</h1>
+  <div id="result"></div>
+  
+  <script>
+    const resultDiv = document.getElementById('result');
+    
+    async function test() {
+      const token = localStorage.getItem('dash_token');
+      resultDiv.innerHTML = `<p>Токен: ${token ? token.substring(0, 30) + '...' : 'НЕТ ТОКЕНА'}</p>`;
+      
+      if (!token) {
+        resultDiv.innerHTML += '<p style="color:red">❌ Токен не найден! Войдите через login.html</p>';
+        return;
+      }
+      
+      try {
+        resultDiv.innerHTML += '<p>⏳ Запрашиваем /api/auth/me...</p>';
+        const meRes = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!meRes.ok) {
+          resultDiv.innerHTML += `<p style="color:red">❌ /api/auth/me вернул статус ${meRes.status}</p>`;
+          const text = await meRes.text();
+          resultDiv.innerHTML += `<pre>${text}</pre>`;
+          return;
+        }
+        
+        const me = await meRes.json();
+        resultDiv.innerHTML += `<p style="color:green">✅ Текущий пользователь:</p>`;
+        resultDiv.innerHTML += `<pre>${JSON.stringify(me, null, 2)}</pre>`;
+        
+        resultDiv.innerHTML += '<p>⏳ Запрашиваем /api/dashboard/employees...</p>';
+        const empRes = await fetch('/api/dashboard/employees', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!empRes.ok) {
+          resultDiv.innerHTML += `<p style="color:red">❌ /api/dashboard/employees вернул статус ${empRes.status}</p>`;
+          const text = await empRes.text();
+          resultDiv.innerHTML += `<pre>${text}</pre>`;
+          return;
+        }
+        
+        const employees = await empRes.json();
+        resultDiv.innerHTML += `<p style="color:green">✅ Сотрудников получено: ${employees.length}</p>`;
+        
+        if (employees.length > 0) {
+          resultDiv.innerHTML += `<p>Первые 5 сотрудников:</p>`;
+          resultDiv.innerHTML += `<pre>${JSON.stringify(employees.slice(0, 5), null, 2)}</pre>`;
+        }
+        
+        // Проверяем, если это global_uat1, должна быть компания УАТ (company_id=12)
+        if (me.scope_company_id === 12) {
+          const uatEmps = employees.filter(e => e.company_id === 12);
+          resultDiv.innerHTML += `<p style="color:green">✅ Сотрудников УАТ (company_id=12): ${uatEmps.length}</p>`;
+        }
+        
+      } catch (err) {
+        resultDiv.innerHTML += `<p style="color:red">❌ Ошибка: ${err.message}</p>`;
+        console.error(err);
+      }
+    }
+    
+    test();
+  </script>
+</body>
+</html>

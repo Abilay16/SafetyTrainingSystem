@@ -1,0 +1,14 @@
+[Unit]
+Description=Instruktazh API
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/instr-backend
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/instr-backend/.env
+ExecStart=/opt/instr-backend/.venv/bin/uvicorn app.app:app --host 0.0.0.0 --port 8001
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Загрузка инструктажей</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { display:flex; min-height:100svh; align-items:center; justify-content:center; background:#f6f7fb; margin:0; padding:16px; }
+    .container{ width:100%; max-width:600px; background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.08); padding:32px; }
+    h1{ font-size:24px; margin:0 0 24px; color:#1a202c;}
+    label{ display:block; font-size:14px; color:#555; margin:16px 0 8px; font-weight:500;}
+    select, input[type="file"]{ width:100%; padding:12px 14px; border:1px solid #dfe3ec; border-radius:10px; font-size:16px; outline:none; background:#fff;}
+    input[type="file"]{ cursor:pointer; }
+    button[type="submit"]{ width:100%; padding:14px; border:0; border-radius:10px; background:#2563eb; color:#fff; font-weight:600; 
+            margin-top:24px; cursor:pointer; font-size:16px; min-height:48px; transition:background 0.2s; -webkit-tap-highlight-color:transparent;}
+    button[type="submit"]:hover:not(:disabled){ background:#1d4ed8; }
+    button[type="submit"]:active:not(:disabled){ transform:scale(0.98); }
+    button[type="submit"]:disabled{ opacity:.6; cursor:not-allowed;}
+    .message{ padding:12px; border-radius:8px; margin-top:16px; font-size:14px; display:none;}
+    .message.success{ background:#d1fae5; color:#065f46; display:block;}
+    .message.error{ background:#fee2e2; color:#991b1b; display:block;}
+    .message.info{ background:#e0f2fe; color:#075985; display:block;}
+    .back-link{ display:inline-block; margin-top:16px; color:#2563eb; text-decoration:none; font-size:14px;}
+    .back-link:hover{ text-decoration:underline;}
+    .file-list{ margin-top:32px; padding-top:24px; border-top:1px solid #e5e7eb;}
+    .file-list h2{ font-size:18px; margin:0 0 16px; color:#1a202c;}
+    .file-item{ padding:12px; background:#f9fafb; border-radius:8px; margin-bottom:8px; font-size:14px; display:flex; justify-content:space-between; align-items:center;}
+    .file-item .name{ font-weight:500; color:#374151;}
+    .file-item .meta{ color:#6b7280; font-size:12px;}
+    .delete-btn{ background:#ef4444; color:#fff; border:0; padding:10px 18px; border-radius:8px; cursor:pointer; font-size:14px; white-space:nowrap; min-width:100px; min-height:44px; transition:background 0.2s; -webkit-tap-highlight-color:transparent;}
+    .delete-btn:hover{ background:#dc2626; }
+    .delete-btn:active{ transform:scale(0.97); }
+    .loader{ display:none; text-align:center; margin-top:16px; color:#6b7280;}
+    .loader.active{ display:block;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📁 Загрузка инструктажей</h1>
+    
+    <form id="uploadForm">
+      <label>Тип инструктажа</label>
+      <select id="instructionType" required>
+        <option value="">Выберите тип</option>
+        <option value="povtorny">Повторный</option>
+        <option value="pervichny">Первичный</option>
+        <option value="vvodny">Вводный</option>
+        <option value="celevoy">Целевой</option>
+        <option value="vneplanovy">Внеплановый</option>
+      </select>
+      
+      <label>Файл (PDF, Word, Видео, Изображения)</label>
+      <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.mp4,.avi,.mov,.webm,.mkv,.wmv,.flv,.m4v,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg" required />
+      
+      <button type="submit" id="uploadBtn">Загрузить</button>
+    </form>
+    
+    <div class="message" id="message"></div>
+    <div class="loader" id="loader">⏳ Загрузка...</div>
+    
+    <a href="./dashboard.html" class="back-link">← Вернуться в дашборд</a>
+    
+    <div class="file-list">
+      <h2>Загруженные файлы</h2>
+      <div id="filesList"></div>
+    </div>
+  </div>
+
+  <script>
+  const API = "";
+  const TOKEN_KEY = 'dash_token';
+  const token = localStorage.getItem(TOKEN_KEY);
+  
+  // Проверка авторизации
+  if (!token) {
+    location.href = './login.html';
+  }
+  
+  const form = document.getElementById('uploadForm');
+  const fileInput = document.getElementById('fileInput');
+  const instructionType = document.getElementById('instructionType');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const message = document.getElementById('message');
+  const loader = document.getElementById('loader');
+  const filesList = document.getElementById('filesList');
+  let uploadDisabled = false;
+  
+  // Загрузка файла
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+
+    if (uploadDisabled) {
+      showMessage('Загрузка доступна только для администраторов и глобальных пользователей.', 'info');
+      return;
+    }
+    
+    const file = fileInput.files[0];
+    if (!file) {
+      showMessage('Выберите файл', 'error');
+      return;
+    }
+    
+    const type = instructionType.value;
+    if (!type) {
+      showMessage('Выберите тип инструктажа', 'error');
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('instruction_type', type);
+    
+    uploadBtn.disabled = true;
+    loader.classList.add('active');
+    message.style.display = 'none';
+    
+    try {
+      const r = await fetch(API + '/api/upload/instruction', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.detail || 'Ошибка загрузки');
+      }
+      const data = await r.json();
+      showMessage(`✅ Файл успешно загружен: ${data.filename}`, 'success');
+      
+      // Очистка формы
+      form.reset();
+      
+      // Обновление списка файлов
+      loadFiles(type);
+      
+    } catch(err) {
+      showMessage('❌ ' + err.message, 'error');
+    } finally {
+      uploadBtn.disabled = false;
+      loader.classList.remove('active');
+    }
+  };
+  
+  // Показать сообщение
+  function showMessage(text, type) {
+    message.textContent = text;
+    message.className = 'message ' + type;
+  }
+
+  // Определить роль пользователя и скрыть загрузку для CHIEF
+  async function loadMe() {
+    try {
+      const r = await fetch(API + '/api/dashboard/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (r.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        location.href = './login.html';
+        return;
+      }
+
+      if (!r.ok) throw new Error('Не удалось получить данные пользователя');
+
+      const data = await r.json();
+      if (data && data.role === 'CHIEF') {
+        uploadDisabled = true;
+        if (fileInput) {
+          fileInput.value = '';
+          fileInput.disabled = true;
+          fileInput.style.display = 'none';
+        }
+        const fileLabel = fileInput?.previousElementSibling;
+        if (fileLabel && fileLabel.tagName === 'LABEL') {
+          fileLabel.style.display = 'none';
+        }
+        if (uploadBtn) {
+          uploadBtn.style.display = 'none';
+        }
+        showMessage('Загрузка доступна только для администраторов и глобальных пользователей.', 'info');
+      }
+    } catch (err) {
+      console.error('Ошибка определения роли пользователя:', err);
+    }
+  }
+  
+  // Загрузка списка файлов
+  async function loadFiles(type) {
+    if (!type) return;
+    
+    try {
+      const r = await fetch(API + `/api/upload/list?instruction_type=${type}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!r.ok) throw new Error('Ошибка загрузки списка');
+      
+      const data = await r.json();
+      
+      if (data.files.length === 0) {
+        filesList.innerHTML = '<div style="color:#6b7280; font-size:14px;">Нет загруженных файлов</div>';
+        return;
+      }
+      
+      filesList.innerHTML = data.files.map(f => {
+        const safeName = String(f.filename).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const safeMonth = String(f.month).replace(/'/g,"\\'");
+        const safeFile  = String(f.filename).replace(/'/g,"\\'");
+        return `
+        <div class="file-item">
+          <div>
+            <div class="name">${safeName}</div>
+            <div class="meta">${f.month} • ${formatSize(f.size)}</div>
+          </div>
+          <button onclick="deleteFile('${type}', '${safeMonth}', '${safeFile}')" class="delete-btn">
+            🗑️ Удалить
+          </button>
+        </div>
+      `}).join('');
+      
+    } catch(err) {
+      console.error(err);
+    }
+  }
+  
+  // Форматирование размера файла
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  }
+  
+  // Удаление файла
+  async function deleteFile(type, month, filename) {
+    if (!confirm(`Удалить файл "${filename}"?\n\nЭто действие необратимо!`)) {
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('instruction_type', type);
+    formData.append('month', month);
+    formData.append('filename', filename);
+    
+    try {
+      const r = await fetch(API + '/api/upload/instruction', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.detail || 'Ошибка удаления');
+      }
+      
+      const data = await r.json();
+      showMessage(`✅ ${data.message}`, 'success');
+      
+      // Обновляем список файлов
+      loadFiles(type);
+      
+    } catch(err) {
+      showMessage('❌ ' + err.message, 'error');
+    }
+  }
+  
+  // Загрузка файлов при выборе типа
+  instructionType.onchange = () => {
+    loadFiles(instructionType.value);
+  };
+  
+  loadMe();
+  // Загрузить файлы при загрузке страницы (повторные по умолчанию)
+  loadFiles('povtorny');
+  </script>
+</body>
+</html>

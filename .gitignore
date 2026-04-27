@@ -1,0 +1,82 @@
+# ── Secrets & credentials ────────────────────────────────────────────────────
+.env
+.env.docker
+.env.production
+.env.local
+*service-account*.json
+*firebase*.json
+*google-services*.json
+keystore.properties
+*.keystore
+*.jks
+
+# ── Sensitive documentation (contains real server IPs, passwords, credentials)
+SERVER_HANDBOOK.md
+PROJECT_CONTEXT.md
+
+# ── Real Nginx config (contains server-specific settings)
+nginx/nginx.conf
+nginx.conf.production
+
+# ── User data & uploads ──────────────────────────────────────────────────────
+storage/
+!storage/.gitkeep
+
+# ── Real employee / business data files ─────────────────────────────────────
+*.xlsx
+*.xls
+
+# ── Database dumps & exports ─────────────────────────────────────────────────
+*.dump
+*.sql.gz
+*.backup
+ASBR_backup.*
+*.csv
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Temp / scratch files ─────────────────────────────────────────────────────
+_tmp_*.sh
+_tmp_*.py
+_tmp_*.sql
+*.tmp
+*.log
+
+# ── Editor & OS ──────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── SSL certificates ─────────────────────────────────────────────────────────
+nginx/certs/
+certs/
+*.pem
+*.crt
+*.key
+
+# ── Node (if ever added) ─────────────────────────────────────────────────────
+node_modules/
+# ── Dev/ops folders (local only, not needed in repo) ─────────────────────────
+_archive/
+_tests/
+_scripts/
+_docs/
+_sql_migrations/
+_deploy_scripts/
+sql/

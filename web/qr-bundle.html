@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Документы</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      color: #1a1a2e;
+    }
+    .header {
+      background: #1565c0;
+      color: white;
+      padding: 20px 20px 16px;
+      text-align: center;
+    }
+    .header .logo { font-size: 2rem; margin-bottom: 6px; }
+    .header h1 { font-size: 1.3rem; font-weight: 700; word-break: break-word; }
+    .header .desc { font-size: 0.88rem; opacity: 0.85; margin-top: 6px; }
+
+    .container { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+
+    .loading {
+      text-align: center;
+      color: #64748b;
+      padding: 60px 20px;
+      font-size: 1rem;
+    }
+    .loading .spin {
+      display: block;
+      width: 40px; height: 40px;
+      border: 4px solid #dbeafe;
+      border-top-color: #1565c0;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      background: #fff1f2;
+      color: #be123c;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-top: 24px;
+    }
+    .error-box .icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    .files-count {
+      color: #64748b;
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+      padding-left: 2px;
+    }
+
+    .file-card {
+      background: white;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: box-shadow 0.15s;
+    }
+    .file-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+    .file-icon { font-size: 2.2rem; flex-shrink: 0; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      word-break: break-word;
+      line-height: 1.35;
+      color: #1e293b;
+    }
+    .file-meta { font-size: 0.78rem; color: #94a3b8; margin-top: 3px; }
+    .file-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .btn-open {
+      display: block;
+      padding: 12px 18px;
+      min-height: 44px;
+      background: #1565c0;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-open:hover { background: #0d47a1; }
+    .btn-open:active { transform: scale(0.97); }
+    .btn-download {
+      display: block;
+      padding: 10px 18px;
+      min-height: 44px;
+      background: transparent;
+      color: #1565c0;
+      border: 1.5px solid #1565c0;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-download:hover { background: #e3f2fd; }
+    .btn-download:active { transform: scale(0.97); }
+
+    .empty-box {
+      text-align: center;
+      padding: 48px 20px;
+      color: #94a3b8;
+    }
+    .empty-box .icon { font-size: 3rem; margin-bottom: 12px; }
+
+    @media (max-width: 420px) {
+      .file-card { flex-wrap: wrap; }
+      .file-actions { flex-direction: row; width: 100%; }
+      .btn-open, .btn-download { flex: 1; padding: 12px 8px; min-height: 48px; font-size: 0.85rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header" id="header" style="display:none">
+  <div class="logo">📂</div>
+  <h1 id="bundle-name"></h1>
+  <div class="desc" id="bundle-desc"></div>
+</div>
+
+<div class="container">
+  <div class="loading" id="loading">
+    <span class="spin"></span>
+    Загружаем документы…
+  </div>
+
+  <div id="error-box" style="display:none" class="error-box">
+    <div class="icon">⚠️</div>
+    <div id="error-msg">Пакет документов не найден</div>
+  </div>
+
+  <div id="files-section" style="display:none">
+    <div class="files-count" id="files-count"></div>
+    <div id="files-list"></div>
+  </div>
+</div>
+
+<script>
+  function getExt(name) { return (name || '').split('.').pop().toLowerCase(); }
+
+  function openUrl(fileUrl, fileName) {
+    window.open(fileUrl, '_blank', 'noopener');
+  }
+
+  function fileIcon(name) {
+    const ext = getExt(name);
+    const map = {
+      pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗',
+      ppt:'📙', pptx:'📙', txt:'📄',
+      jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️', webp:'🖼️',
+      mp4:'🎬', avi:'🎬', mov:'🎬', webm:'🎬',
+    };
+    return map[ext] || '📎';
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' Б';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+    return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function load() {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (!id) { showError('Некорректная ссылка — отсутствует ID пакета'); return; }
+
+    try {
+      const res = await fetch('/api/qr/bundle/' + encodeURIComponent(id));
+      if (res.status === 404) { showError('Пакет документов не найден'); return; }
+      if (!res.ok) { showError('Ошибка загрузки: ' + res.status); return; }
+      const data = await res.json();
+      render(data);
+    } catch(e) {
+      showError('Не удалось загрузить документы: ' + e.message);
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error-msg').textContent = msg;
+    document.getElementById('error-box').style.display = 'block';
+  }
+
+  function render(data) {
+    document.getElementById('loading').style.display = 'none';
+
+    // Header
+    document.title = data.name || 'Документы';
+    document.getElementById('bundle-name').textContent = data.name;
+    if (data.description) {
+      document.getElementById('bundle-desc').textContent = data.description;
+    }
+    document.getElementById('header').style.display = 'block';
+
+    const files = data.files || [];
+    if (!files.length) {
+      document.getElementById('files-section').style.display = 'block';
+      document.getElementById('files-list').innerHTML =
+        '<div class="empty-box"><div class="icon">📭</div>В этом пакете пока нет файлов</div>';
+      return;
+    }
+
+    document.getElementById('files-count').textContent =
+      `${files.length} ${declFiles(files.length)}`;
+
+    document.getElementById('files-list').innerHTML = files.map(f => `
+      <div class="file-card">
+        <div class="file-icon">${fileIcon(f.original_name)}</div>
+        <div class="file-info">
+          <div class="file-name">${escHtml(f.original_name)}</div>
+          <div class="file-meta">${formatSize(f.file_size)}</div>
+        </div>
+        <div class="file-actions">
+          <button class="btn-open" onclick="openUrl('${escHtml(f.file_url)}','${escHtml(f.original_name)}')">Открыть</button>
+          <a class="btn-download" href="${escHtml(f.file_url)}?download=1" download="${escHtml(f.original_name)}">Скачать</a>
+        </div>
+      </div>
+    `).join('');
+
+    document.getElementById('files-section').style.display = 'block';
+  }
+
+  function declFiles(n) {
+    if (n % 100 >= 11 && n % 100 <= 19) return 'файлов';
+    const r = n % 10;
+    if (r === 1) return 'файл';
+    if (r >= 2 && r <= 4) return 'файла';
+    return 'файлов';
+  }
+
+  load();
+</script>
+</body>
+</html>

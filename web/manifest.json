@@ -1,0 +1,20 @@
+{
+  "name": "Электронный инструктаж",
+  "short_name": "Инструктаж",
+  "description": "Система электронных инструктажей по охране труда",
+  "start_url": "./инструктаж.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f2f5fa",
+  "theme_color": "#5b9bd5",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "./Ozen.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

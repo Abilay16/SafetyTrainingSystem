@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<script src="/libs/fcm-bridge.js"></script>
+<script>
+// === AUTH BOOTSTRAP (универсально для всех страниц) ===
+(function () {
+  // используем отдельный ключ, независимый от dashboard
+  const TOKEN_KEY = 'instr_token';
+
+  // 1) если нет токена — на логин
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    const to = encodeURIComponent(decodeURIComponent(location.pathname.split('/').pop() || 'инструктаж.html'));
+    location.href = './login.html?to=' + to;
+    return;
+  }
+
+  // 2) оборачиваем fetch: добавляем Authorization и обрабатываем 401
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async (input, init = {}) => {
+    const t = localStorage.getItem(TOKEN_KEY);
+    init.headers = Object.assign(
+      {},
+      init.headers || {},
+      t ? { Authorization: 'Bearer ' + t } : {}
+    );
+
+    const resp = await origFetch(input, init);
+    if (resp.status === 401) {
+      // токен просрочен или неверен — разлогиниваем
+      localStorage.removeItem(TOKEN_KEY);
+      const to = encodeURIComponent(decodeURIComponent(location.pathname.split('/').pop() || 'инструктаж.html'));
+      location.href = './login.html?to=' + to;
+      throw new Error('Unauthorized');
+    }
+    return resp;
+  };
+
+  // 3) глобальная функция выхода (можно повесить на кнопку)
+  window.logout = function () {
+    localStorage.removeItem(TOKEN_KEY);
+    const to = encodeURIComponent(decodeURIComponent(location.pathname.split('/').pop() || 'инструктаж.html'));
+    location.href = './login.html?to=' + to;
+  };
+})();
+</script>
+
+  <meta charset="UTF-8" />
+  <meta name="theme-color" content="#5b9bd5">
+  <link rel="icon" type="image/png" href="./Ozen.png">
+  <link rel="manifest" href="manifest.json">
+  <title>Электронный журнал для инструктажей</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Библиотеки -->
+  <script defer src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <!-- JSZip (зависимость для docx-preview) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Локальная библиотека для просмотра DOCX -->
+  <script defer src="libs/docx-preview.min.js"></script>
+
+  <link rel="stylesheet" href="инструктаж.css">
+
+</head>
+<body>
+
+  <header>
+    <div class="header-flex">
+  <a class="header-logo" href="инструктаж.html" title="На главную"><img src="Ozen.png" alt="Озен"></a>
+      <div class="header-title"><h1>Электронный инструктаж</h1></div>
+      <div class="header-login-container">
+        <input id="login" class="header-input" placeholder="Цех">
+        <input id="password" class="header-input" type="password" placeholder="Пароль">
+        <button id="authBtn" class="header-btn" onclick="handleAuth()">Войти</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="left">
+      <h3>Виды инструктажей</h3>
+      <button class="category-btn" onclick="loadCategory('vvodny', this)">Вводный</button>
+      <button class="category-btn" onclick="loadCategory('pervichny', this)">Первичный</button>
+      <button class="category-btn" onclick="loadCategory('povtorny', this)">Повторный</button>
+      <button class="category-btn" onclick="loadCategory('vneplanovy', this)">Внеплановый</button>
+      <button class="category-btn" onclick="loadCategory('celevoy', this)">Целевой</button>
+    </aside>
+
+    <section class="right">
+      <div id="welcomeMessage" style="text-align:center; padding:80px 20px; color:#6b7280; font-size:18px;">
+        <p style="font-size:48px; margin:0 0 16px;">📋</p>
+        <p style="margin:0; font-weight:600;">Выберите тип инструктажа</p>
+        <p style="margin:8px 0 0; font-size:14px;">Нажмите на кнопку слева для начала</p>
+      </div>
+      <div id="simpleForm">
+        <div class="form-left">
+          <h2 id="simpleTitle"></h2>
+          <label>Дата и время (авто):</label>
+          <input id="simpleDate" type="text" disabled class="header-input" style="width:100%;margin-bottom:8px">
+          <label>ИИН:</label>
+          <input id="simpleId" class="header-input" style="width:100%;margin-bottom:8px">
+          <label>ФИО:</label>
+          <input id="simpleFio" class="header-input" style="width:100%;margin-bottom:8px">
+          <label>Год рождения:</label>
+          <input id="simpleYear" type="date" class="header-input" style="width:100%;margin-bottom:8px">
+          <label>Профессия, должность:</label>
+          <input id="simpleProf" class="header-input" style="width:100%;margin-bottom:8px">
+          <label>Место работы:</label>
+          <input id="simpleDept" class="header-input" style="width:100%;margin-bottom:8px">
+          <label>ФИО инструктора:</label>
+          <input id="simpleInstrName" class="header-input" style="width:100%;margin-bottom:8px">
+
+          <label>Просмотр инструкции:</label>
+          <div id="simplePreview" style="border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:10px;"></div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button type="button" id="exportSimpleBtn" class="header-btn">Скачать журнал</button>
+            <button type="button" onclick="cancelSimple()" class="header-btn">Отмена</button>
+            <button type="button" onclick="submitSimple()" class="header-btn">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="form-right">
+          <label>Подпись сотрудника:</label>
+          <canvas id="simpleCanvasEmp" width="500" height="150"></canvas>
+          <button type="button" onclick="clearSimpleEmp()" class="header-btn">Очистить подпись сотрудника</button>
+
+          <label style="margin-top:16px">Подпись инструктора:</label>
+          <canvas id="simpleCanvasInstr" width="500" height="150"></canvas>
+          <button type="button" onclick="clearSimpleInstr()" class="header-btn">Очистить подпись инструктора</button>
+        </div>
+      </div>
+
+      <div id="monthToolbar" class="month-toolbar">
+        <button type="button" id="prevMonthBtn" class="btn-big" title="Предыдущий месяц">‹</button>
+        <input type="month" id="monthPicker" style="display:none">
+        <div id="monthPretty" class="month-pretty">—</div>
+        <button type="button" id="nextMonthBtn" class="btn-big" title="Следующий месяц">›</button>
+        <button type="button" id="thisMonthBtn" class="btn-big">Этот месяц</button>
+        <button type="button" id="showDoneBtn" class="btn-big" style="font-size:16px;line-height:22px;min-width:unset;padding:0 16px">Показывать пройденные</button>
+      </div>
+      <div id="filesContainer" class="file-grid"></div>
+
+    </section>
+  </div>
+
+  <div id="viewer" class="modal">
+    <div class="viewer-panel" role="dialog" aria-modal="true">
+      <div class="viewer-header">
+        <div id="viewerTitle" class="viewer-title">Инструктаж</div>
+        <div class="viewer-actions">
+          <a id="downloadLink" class="header-btn" target="_blank" rel="noopener">Скачать</a>
+          <button id="closeViewer" class="header-btn" type="button">Закрыть</button>
+        </div>
+      </div>
+      <div class="viewer-body">
+        <div id="preview"></div>
+      </div>
+      <div class="viewer-footer">
+        <div class="ack-row" role="group" aria-label="Подтверждение ознакомления">
+          <input type="checkbox" id="confirm" aria-label="Ознакомлен с инструктажом">
+          <label for="confirm">Ознакомлен с инструктажом</label>
+        </div>
+
+        <!-- Прокручиваемый блок: тест + подпись -->
+        <div id="footerScrollable">
+
+        <!-- Блок с AI-вопросами -->
+        <div id="quizBlock" style="display:none;padding:16px;background:#f8fafc;border:1px solid #e0e6f0;border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="font-size:18px;color:#1f365c">Проверка знаний</h3>
+            <div style="display:flex;gap:8px">
+              <label style="display:flex;align-items:center;gap:4px">
+                <input type="radio" name="quizLang" value="ru" checked>
+                <span>Русский</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:4px">
+                <input type="radio" name="quizLang" value="kk">
+                <span>Қазақша</span>
+              </label>
+            </div>
+          </div>
+          <div id="quizLoading" style="text-align:center;padding:20px;color:#64748b">
+            Загрузка вопросов...
+          </div>
+          <div id="quizQuestions" style="display:none"></div>
+          <div id="quizResult" style="display:none;padding:12px;border-radius:6px;margin-top:12px"></div>
+          <button id="submitQuiz" type="button" class="header-btn" style="margin-top:12px;display:none">
+            Проверить ответы
+          </button>
+        </div>
+        
+        <div id="signatureBlock" style="display:none;margin-top:12px">
+          <label style="margin-top:8px">Подпись (пальцем/мышкой):</label>
+          <canvas id="canvas" width="500" height="150" style="max-width:100%;height:150px;border:1px solid #cbd5e1;border-radius:6px"></canvas>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button type="button" onclick="clearCanvas()" class="header-btn">Очистить подпись</button>
+            <button type="button" onclick="submitForm()" class="header-btn">Подтвердить инструктаж</button>
+          </div>
+        </div>
+
+        </div><!-- /#footerScrollable -->
+      </div>
+    </div>
+  </div>
+
+  
+  <script src="инструктаж.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

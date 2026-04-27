@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<script src="/libs/fcm-bridge.js"></script>
+<script>
+// === AUTH BOOTSTRAP (универсально для всех страниц) ===
+(function () {
+  // независимый ключ для дэшборда
+  const TOKEN_KEY = 'dash_token';
+
+  // 1) если нет токена — на логин
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    location.href = './login.html?to=' + encodeURIComponent(location.pathname.split('/').pop() || 'dashboard.html');
+    return;
+  }
+
+  // 2) оборачиваем fetch: добавляем Authorization и обрабатываем 401
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async (input, init = {}) => {
+    const t = localStorage.getItem(TOKEN_KEY);
+    init.headers = Object.assign(
+      {},
+      init.headers || {},
+      t ? { Authorization: 'Bearer ' + t } : {}
+    );
+
+    const resp = await origFetch(input, init);
+    if (resp.status === 401) {
+      // токен просрочен или неверен — разлогиниваем
+      localStorage.removeItem(TOKEN_KEY);
+      location.href = './login.html';
+      throw new Error('Unauthorized');
+    }
+    return resp;
+  };
+
+  // 3) глобальная функция выхода (можно повесить на кнопку)
+  window.logout = function () {
+    localStorage.removeItem(TOKEN_KEY);
+    location.href = './login.html?to=' + encodeURIComponent(location.pathname.split('/').pop() || 'dashboard.html');
+  };
+})();
+</script>
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Онлайн-журнал инструктажей</title>
+  <script defer src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#0f172a; }
+    body { margin:0; background:#f2f5fa; }
+    header{ background:#f2f5fa; border-bottom:2px solid #5b9bd5; }
+    .header-flex{ display:flex; align-items:center; padding:10px 16px;}
+    .header-logo img{ height:70px; }
+    .header-title{ flex:1; text-align:center; font-weight:700; color:#5b9bd5; font-size:20px;}
+    .controls{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:12px; background:#fff; }
+    .controls label{ font-size:14px; color:#334155; display:flex; gap:6px; align-items:center; }
+    select,input,button{ padding:8px 10px; border:1px solid #dfe3ec; border-radius:8px; font-size:16px; background:#fff; }
+    button.primary{ background:#2563eb; color:#fff; border:0; cursor:pointer; min-height:44px; -webkit-tap-highlight-color:transparent; }
+    .wrap{ padding:14px; }
+    table{ width:100%; border-collapse:collapse; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.06); }
+    th,td{ padding:8px 10px; border-bottom:1px solid #eef2f7; text-align:left; }
+    th{ background:#e9f2fb; color:#295c9f; position:sticky; top:0; }
+    tr:hover td{ background:#fafcff; }
+    .muted{ color:#667085; }
+    .ok{ color: #15803d; font-weight:600; }
+    .bad{ color:#b91c1c; font-weight:600; }
+    /* Адаптивность для планшетов и смартфонов */
+    @media (max-width: 900px){ 
+      .header-title{font-size:18px;} 
+      .header-logo img{ height:56px; }
+    }
+    
+    @media (max-width: 768px){
+      .header-flex{ flex-wrap:wrap; padding:8px 12px; }
+      .header-title{ flex-basis:100%; order:2; margin-top:8px; font-size:16px; text-align:left; }
+      .header-logo{ order:1; }
+      .header-logo img{ height:48px; }
+      
+      .controls{ flex-direction:column; align-items:stretch; gap:8px; }
+      .controls label{ width:100%; }
+      select,input,button{ width:100%; min-height:44px; font-size:16px; } /* Увеличено для тача */
+      
+      .wrap{ padding:8px; overflow-x:auto; }
+      
+      /* Улучшаем таблицу на мобильных */
+      table{ font-size:13px; }
+      th,td{ padding:6px 8px; }
+      #matrix td, #matrix th { padding: 4px 6px; font-size:12px; }
+    }
+    
+    @media (max-width: 480px){
+      .header-title{ font-size:14px; }
+      .header-logo img{ height:40px; }
+      table{ font-size:12px; }
+      th,td{ padding:4px 6px; }
+    }
+    #matrix thead th {
+    position: sticky; top: 0; background: #fff; z-index: 2; border-bottom: 1px solid #ddd;
+    }
+    /* Общие стили для всех ячеек - должны идти ПЕРВЫМИ */
+    #matrix td, #matrix th { padding: 10px 12px; white-space: nowrap; font-size: 14px; }
+    
+    /* Закрепленные столбцы - перекрывают общие стили */
+    #matrix th.sticky, #matrix td.sticky {
+    position: sticky; left: 0; background: #fff; z-index: 3; border-right: 2px solid #dfe3ec;
+    max-width: 200px; min-width: 200px; width: 200px;
+    white-space: normal !important; word-wrap: break-word;
+    line-height: 1.4; vertical-align: middle;
+    font-weight: 500;
+    }
+    #matrix th.sticky2, #matrix td.sticky2 {
+    position: sticky; left: 200px; background: #fff; z-index: 3; border-right: 2px solid #dfe3ec;
+    white-space: normal !important; word-wrap: break-word; 
+    max-width: 220px; min-width: 220px; width: 220px;
+    line-height: 1.45; font-size: 13px; vertical-align: middle;
+    color: #475569;
+    }
+    #matrix td.chk { text-align: center; font-weight: 600; }
+    #matrix th.chk { text-align: center; font-weight: 600; min-width: 120px; }
+    #matrix td.chk.ok { color: #16a34a; }     /* ✓ */
+    #matrix td.chk.no { color: #dc2626; }     /* ✗ */
+    
+    /* Мобильные устройства */
+    @media (max-width: 768px) {
+      #matrix td, #matrix th { padding: 8px 10px; font-size: 13px; }
+      #matrix th.sticky, #matrix td.sticky {
+        max-width: 160px; min-width: 160px; width: 160px;
+        font-size: 13px;
+      }
+      #matrix th.sticky2, #matrix td.sticky2 {
+        left: 160px;
+        max-width: 180px; min-width: 180px; width: 180px;
+        font-size: 12px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      #matrix td, #matrix th { padding: 6px 8px; font-size: 12px; }
+      #matrix th.sticky, #matrix td.sticky {
+        max-width: 140px; min-width: 140px; width: 140px;
+        font-size: 12px;
+      }
+      #matrix th.sticky2, #matrix td.sticky2 {
+        left: 140px;
+        max-width: 150px; min-width: 150px; width: 150px;
+        font-size: 11px;
+      }
+    }
+      /* --- Мобильный карточный вид сотрудников --- */
+      .emp-card{background:#fff; margin:8px 0; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,.05); padding:10px 12px;}
+      .emp-card h3{margin:0 0 4px; font-size:15px; line-height:1.3;}
+      .emp-card small{display:block; margin-bottom:6px; color:#64748b;}
+      .emp-card .files{display:flex; flex-wrap:wrap; gap:6px;}
+      .emp-card .files span{padding:4px 6px; border-radius:6px; font-size:12px; font-weight:600;}
+      .emp-card .files span.ok{background:#dcfce7; color:#15803d;}
+      .emp-card .files span.no{background:#fee2e2; color:#b91c1c;}
+      @media (max-width:600px){
+        #matrixWrap{display:none !important;}
+        #cardsWrap{display:block !important;}
+        .mobile-hint{display:block; font-size:12px; color:#64748b; margin:4px 0 8px;}
+      }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-flex">
+      <div class="header-logo"><img src="Ozen.png" alt="Озен"></div>
+      <div class="header-title">Онлайн-журнал инструктажей</div>
+      <div id="who" class="muted">Загрузка…</div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <label>Тип:
+      <select id="type">
+        <option value="povtorny">Повторный</option>
+        <option value="vneplanovy">Внеплановый</option>
+        <option value="celevoy">Целевой</option>
+      </select>
+    </label>
+
+    <label>Месяц: <input id="month" type="month" /></label>
+
+    <label id="deptWrap">Подразделение:
+      <select id="dept"></select>
+    </label>
+
+    <label>По ФИО: <input id="search" placeholder="Начните вводить…" /></label>
+
+  <!-- Кнопка Показать больше не нужна, перерисовка происходит автоматически -->
+  <button class="primary" id="apply" style="display:none">Показать</button>
+    <button id="upload" onclick="location.href='./upload.html'" style="background:#10b981;">📁 Загрузить файлы</button>
+    <button id="export">Скачать Excel</button>
+    <button id="logout">Выйти</button>
+  </div>
+
+  <!-- Модальное окно для подписи инструктора -->
+  <div id="instructorModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:12px; padding:24px; max-width:500px; width:92%; box-shadow:0 4px 20px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; overflow-y:auto;">
+      <h3 style="margin:0 0 16px 0;">Подпись инструктора</h3>
+      <label style="display:block; margin-bottom:16px;">
+        ФИО инструктора:
+        <input id="instructorName" type="text" placeholder="Иванов Иван Иванович" style="width:100%; padding:10px; margin-top:4px; border:1px solid #ccc; border-radius:8px; font-size:16px; min-height:44px;" />
+      </label>
+      <div style="margin-bottom:16px;">
+        <label style="display:block; margin-bottom:4px;">Подпись инструктора:</label>
+        <canvas id="instructorCanvas" width="400" height="150" style="border:1px solid #ccc; cursor:crosshair; display:block; width:100%; touch-action:none;"></canvas>
+        <button id="clearInstructorSig" style="margin-top:8px; padding:8px 16px; min-height:44px; border-radius:8px; font-size:15px;">Очистить</button>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button id="cancelInstructor" style="padding:10px 20px; min-height:44px; background:#6b7280; color:white; border:none; border-radius:8px; cursor:pointer; font-size:15px;">Отмена</button>
+        <button id="confirmInstructor" style="padding:10px 20px; min-height:44px; background:#10b981; color:white; border:none; border-radius:8px; cursor:pointer; font-size:15px;">Скачать Excel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="hint" class="muted" style="padding:8px 14px;">Выберите месяц и тип.</div>
+
+   <!-- Матрица «сотрудники × файлы» -->
+   <div id="matrixWrap" style="display:none; overflow:auto;">
+     <table id="matrix" class="table table-sm" style="border-collapse:separate; border-spacing:0; min-width:900px;">
+       <thead></thead>
+       <tbody></tbody>
+     </table>
+   </div>
+    <div id="cardsWrap" style="display:none; padding:8px;"></div>
+
+
+  <script>
+  const API = ""; // пусто = этот же origin (http://localhost:8001)
+  const token = localStorage.getItem('dash_token');
+  if (!token) location.href = './login.html?to=' + encodeURIComponent('dashboard.html');
+
+    const els = {
+      who: document.getElementById('who'),
+      type: document.getElementById('type'),
+      month: document.getElementById('month'),
+      dept: document.getElementById('dept'),
+      deptWrap: document.getElementById('deptWrap'),
+      q: document.getElementById('q'),
+      apply: document.getElementById('apply'),
+      export: document.getElementById('export'),
+      upload: document.getElementById('upload'),
+      logout: document.getElementById('logout'),
+      hint: document.getElementById('hint'),
+      rows: document.getElementById('rows')
+    };
+
+    // Временно скрываем кнопку экспорта, loadMe() покажет её только для CHIEF
+    if (els.export) els.export.style.display = 'none';
+
+    const searchInp  = document.getElementById('search');
+    const matrixWrap = document.getElementById('matrixWrap');
+    const matrix     = document.getElementById('matrix');
+  const cardsWrap  = document.getElementById('cardsWrap');
+
+
+    let ME = null;        // { login, role, scope_company_id, scope_orgunit_id }
+    let EMPLOYEES = [];   // из /api/dashboard/employees
+    let RECORDS = [];     // из /api/dashboard/records
+    let eventSource = null; // SSE подключение для real-time обновлений
+
+    function yyyymm(d){ const Y=d.getFullYear(); const M=String(d.getMonth()+1).padStart(2,'0'); return `${Y}-${M}`; }
+    function fmtDate(s){ if(!s) return ''; const d=new Date(s); if (isNaN(d)) return s; return d.toLocaleString(); }
+
+    const pad2 = n => String(n).padStart(2,'0');
+
+  function sameFile(a, b){
+    if (!a || !b) return false;
+    const A = String(a).split(/[\\/]/).pop().toLowerCase();
+    const B = String(b).split(/[\\/]/).pop().toLowerCase();
+    return A === B;
+  }
+
+  function recordBelongsToYM(r, ym) { // 'YYYY-MM'
+    // Сопоставляем по месяцу сессии (r.month), а не по дате подписи,
+    // чтобы прохождения за прошлый месяц были видны, даже если подписали в следующем.
+    return String(r.month) === String(ym);
+  }
+
+  function debounce(fn, ms=250) {
+  let t; 
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  function parseBirthDateCandidate(value) {
+    if (!value && value !== 0) return null;
+    if (value instanceof Date && !isNaN(value)) return value;
+    if (typeof value === 'number' && isFinite(value)) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return new Date(`${iso[1]}-${iso[2]}-${iso[3]}`);
+    const dmy = raw.match(/(\d{2})[.\/-](\d{2})[.\/-](\d{4})/);
+    if (dmy) return new Date(`${dmy[3]}-${dmy[2]}-${dmy[1]}`);
+    return null;
+  }
+
+  function formatBirthDate(...values) {
+    for (const val of values) {
+      const dt = parseBirthDateCandidate(val);
+      if (dt && !isNaN(dt)) {
+        return `${pad2(dt.getDate())}.${pad2(dt.getMonth()+1)}.${dt.getFullYear()}`;
+      }
+    }
+    for (const val of values) {
+      if (val === undefined || val === null) continue;
+      if (typeof val === 'number' && isFinite(val)) {
+        const year = Math.trunc(val);
+        return year > 0 ? `??.??.${year}` : '';
+      }
+      const match = String(val).trim().match(/(\d{4})/);
+      if (match) return `??.??.${match[1]}`;
+    }
+    return '';
+  }
+
+    // Запоминаем, чтобы не тянуть данные лишний раз
+   let LAST = { type: null, month: null, dept: null };
+   let LAST_FILES = [];  // файлы для текущего (type, month)
+
+  async function getFilesForMonth(type, ym){
+    const qs = new URLSearchParams({ type, month: ym });
+    const items = await api('/api/dashboard/files?' + qs.toString());
+    // API возвращает объекты { name, mtime }, но матрице и экспорту нужны только имена файлов
+    return Array.isArray(items) ? items.map(x => x.name) : [];
+  }
+
+
+  async function renderMatrix(forceRefresh=false){
+    const type  = els.type.value;
+    const ym    = els.month.value;
+    const dept  = els.dept ? els.dept.value : '';
+
+  if (!ym){ els.hint.textContent='Выберите месяц'; return; }
+
+  // нужно ли обновлять с сервера
+  const mustReload = forceRefresh ||
+    (LAST.type !== type) || (LAST.month !== ym) || (LAST.dept !== String(dept));
+
+  if (mustReload){
+    els.hint.textContent = 'Загрузка…';
+    await loadEmployees();   // учитывает роль
+    await loadRecords();     // учитывает роль и фильтры
+    LAST_FILES = await getFilesForMonth(type, ym); // список колонок
+    LAST = { type, month: ym, dept: String(dept) };
+  }
+
+  if (!LAST_FILES.length){
+    els.hint.textContent = 'В этом месяце нет инструктажей.';
+    matrixWrap.style.display = 'none';
+    if (cardsWrap) cardsWrap.style.display='none';
+    return;
+  }
+
+  // Фильтр по ФИО (live)
+  const q = (searchInp?.value || '').trim().toLowerCase();
+
+  const empsBase = EMPLOYEES
+    .filter(e => !dept || String(e.orgunit_id) === String(dept))
+    .filter(e => !q || String(e.fio||'').toLowerCase().includes(q))
+    .sort((a,b)=> (a.fio||'').localeCompare(b.fio||'', 'ru'));
+
+  const recs = RECORDS.filter(r => recordBelongsToYM(r, ym) && (!type || r.type===type));
+
+  // Сопоставляем записи по чистому табельному номеру (без @организация) + company_id
+  const signed = new Set(
+    recs.filter(r => r.signed_at)
+        .map(r => {
+          const cleanIdnum = String(r.idnum).split('@')[0].trim();
+          const fileName = String(r.file).split(/[\\/]/).pop();
+          const cid = r.company_id || 0; // если нет company_id, берём 0
+          return `${cleanIdnum}::${cid}::${fileName}`;
+        })
+  );
+
+  // Рендер
+  const thead = matrix.querySelector('thead');
+  const tbody = matrix.querySelector('tbody');
+  thead.innerHTML = '';
+  tbody.innerHTML = '';
+
+  // Верхняя строка: суммарные показатели по каждому файлу (✓ / ✗)
+  const trTotals = document.createElement('tr');
+  const thBlank1 = document.createElement('th'); thBlank1.className = 'sticky'; thBlank1.textContent = '';
+  const thBlank2 = document.createElement('th'); thBlank2.className = 'sticky2'; thBlank2.textContent = '';
+  trTotals.appendChild(thBlank1);
+  trTotals.appendChild(thBlank2);
+  for (const fname of LAST_FILES){
+    const okCount  = empsBase.reduce((acc,e)=> {
+      const cid = e.company_id || 0;
+      return acc + (signed.has(`${String(e.idnum).trim()}::${cid}::${String(fname)}`) ? 1 : 0);
+    }, 0);
+    const allCount = empsBase.length;
+    const th = document.createElement('th');
+    th.className = 'chk';
+    th.innerHTML = `<span style=\"color:#16a34a\">✓ ${okCount}</span> / <span style=\"color:#dc2626\">✗ ${allCount - okCount}</span>`;
+    trTotals.appendChild(th);
+  }
+  thead.appendChild(trTotals);
+
+  // Вторая строка: названия файлов (колонок)
+  const trh = document.createElement('tr');
+  const thFio = document.createElement('th'); thFio.textContent = 'ФИО'; thFio.className='sticky';
+  const thProf = document.createElement('th'); thProf.textContent = 'Профессия'; thProf.className='sticky2';
+  trh.appendChild(thFio);
+  trh.appendChild(thProf);
+  LAST_FILES.forEach(fname=>{ 
+    const th = document.createElement('th'); 
+    const label = String(fname||'').replace(/\.[^/.]+$/, '');
+    th.textContent = label; 
+    th.className = 'chk';  // Добавляем класс для центрирования
+    trh.appendChild(th); 
+  });
+  thead.appendChild(trh);
+
+  for (const e of empsBase){
+    const tr = document.createElement('tr');
+
+    const tdFio  = document.createElement('td'); tdFio.textContent = e.fio || '';        tdFio.className='sticky';
+    const tdProf = document.createElement('td'); tdProf.textContent = e.profession||'';  tdProf.className='sticky2';
+    tr.appendChild(tdFio);
+    tr.appendChild(tdProf);
+
+    for (const fname of LAST_FILES){
+      const cid = e.company_id || 0;
+      const key = `${String(e.idnum).trim()}::${cid}::${String(fname)}`;
+      const ok  = signed.has(key);
+      const td  = document.createElement('td');
+      td.className = 'chk ' + (ok ? 'ok' : 'no');
+      td.textContent = ok ? '✓' : '✗';
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+
+  // Итого перенесли в верхнюю строку заголовка
+
+  els.hint.textContent = `${empsBase.length} сотрудников`;
+  matrixWrap.style.display = '';
+
+  // Мобильный карточный вид (рендерим если ширина экрана узкая)
+  if (cardsWrap){
+    if (window.innerWidth < 600){
+      cardsWrap.innerHTML = '<div class="mobile-hint">Мобильный вид: статусы по файлам для каждого сотрудника.</div>';
+      for (const e of empsBase){
+        const card = document.createElement('div');
+        card.className='emp-card';
+        const fio = e.fio || '';
+        const prof = e.profession || '';
+        const filesDiv = document.createElement('div');
+        filesDiv.className='files';
+        for (const fname of LAST_FILES){
+          const cid = e.company_id || 0;
+          const key = `${String(e.idnum).trim()}::${cid}::${String(fname)}`;
+          const ok = signed.has(key);
+          const span = document.createElement('span');
+          span.className = ok ? 'ok' : 'no';
+          span.textContent = (ok ? '✓ ' : '✗ ') + fname.replace(/\.[^.]+$/, '');
+          filesDiv.appendChild(span);
+        }
+        card.innerHTML = `<h3>${fio}</h3><small>${prof}</small>`;
+        card.appendChild(filesDiv);
+        cardsWrap.appendChild(card);
+      }
+      cardsWrap.style.display='';
+    } else {
+      cardsWrap.style.display='none';
+      cardsWrap.innerHTML='';
+    }
+  }
+  }
+
+  // Месяц/Тип/Подразделение — перерисовываем и обновляем данные
+els.month.addEventListener('change', () => renderMatrix(true));
+els.type.addEventListener('change',  () => renderMatrix(true));
+// Переключение подразделения — без похода на сервер, просто локальная перерисовка
+if (els.dept) els.dept.addEventListener('change', () => renderMatrix(false));
+
+// Поиск по ФИО — только локальная перерисовка (без похода на сервер)
+if (searchInp) searchInp.addEventListener('input', debounce(() => renderMatrix(false), 200));
+
+// Кнопка «Показать» больше не нужна, но если она есть — можно оставить:
+if (els.apply) els.apply.onclick = () => renderMatrix(true);
+
+// При загрузке страницы можно сразу отрисовать (если задан месяц/тип)
+document.addEventListener('DOMContentLoaded', () => {
+  if (els.month.value) renderMatrix(true);
+});
+
+
+      // Показать модальное окно с подписью инструктора
+      async function exportMonthWorkbook(){
+        const type = els.type.value;
+        const ym   = els.month.value;
+        if (!ym){ alert('Сначала выберите месяц.'); return; }
+
+        // Проверяем роль: если CHIEF - показываем окно, иначе экспорт без окна
+        if (ME && ME.role === 'CHIEF') {
+          // Показываем модальное окно для начальников
+        const modal = document.getElementById('instructorModal');
+        const instructorNameInput = document.getElementById('instructorName');
+        const canvas = document.getElementById('instructorCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Очистка canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Рисование на canvas через Pointer Events (работает на мыши, планшете и телефоне)
+        let drawing = false;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        function getCanvasXY(e) {
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+          return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+          };
+        }
+        
+        canvas.onpointerdown = (e) => {
+          e.preventDefault();
+          drawing = true;
+          const {x, y} = getCanvasXY(e);
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+        };
+        
+        canvas.onpointermove = (e) => {
+          if (!drawing) return;
+          e.preventDefault();
+          const {x, y} = getCanvasXY(e);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        };
+        
+        canvas.onpointerup = () => drawing = false;
+        canvas.onpointerleave = () => drawing = false;
+        canvas.onpointercancel = () => drawing = false;
+        
+        // Кнопка очистки
+        document.getElementById('clearInstructorSig').onclick = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        };
+        
+        // Показать модальное окно
+        modal.style.display = 'flex';
+        
+        // Отмена
+        document.getElementById('cancelInstructor').onclick = () => {
+          modal.style.display = 'none';
+        };
+        
+        // Подтверждение и экспорт
+        document.getElementById('confirmInstructor').onclick = async () => {
+          const instructorName = instructorNameInput.value.trim();
+          if (!instructorName) {
+            alert('Введите ФИО инструктора');
+            return;
+          }
+          
+          // Получаем подпись как base64
+          const instructorSignature = canvas.toDataURL('image/png');
+          
+          try {
+            // Отправляем подпись на сервер
+            const response = await fetch('/api/upload-instructor-signature', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ signature: instructorSignature })
+            });
+            
+            if (!response.ok) {
+              throw new Error('Failed to upload signature');
+            }
+            
+            const data = await response.json();
+            const instructorSignatureUrl = data.url; // "instructor_signatures/chief_13_1732101234.png"
+            
+            // Закрываем модальное окно
+            modal.style.display = 'none';
+            
+            // Выполняем экспорт с URL подписи
+            await performExport(instructorName, instructorSignatureUrl);
+          } catch (error) {
+            alert('Ошибка при загрузке подписи: ' + error.message);
+          }
+        };
+        } else {
+          // Для ADMIN/GLOBAL экспортируем без окна (данные из БД)
+          await performExport(null, null);
+        }
+      }
+
+      // Функция экспорта с данными инструктора
+      async function performExport(instructorName, instructorSignature){
+        const type = els.type.value;
+        const ym   = els.month.value;
+        
+        // выбранный отдел (для ADMIN/GLOBAL; у CHIEF селект скрыт)
+        const dept = els.dept.value ? Number(els.dept.value) : null;
+
+        // полный список файлов за месяц/тип
+        const files = await getFilesForMonth(type, ym);
+        if (!files.length){ alert('В этом месяце нет инструктажей.'); return; }
+
+        // записи уже загружены фильтрованными по month/type (/api/dashboard/records)
+        const monthRecs = RECORDS.slice();
+    const typeNames = {
+       'vvodny': 'Вводный',
+       'pervichny': 'Первичный',
+       'povtorny': 'Повторный',
+       'vneplanovy': 'Внеплановый',
+       'celevoy': 'Целевой'
+    };
+    const typeRu = typeNames[type] || type;
+    
+    const wb = XLSX.utils.book_new();
+    const pad2 = n => String(n).padStart(2,'0');
+
+    // индекс сотрудника по таб. №
+    const empById = new Map(EMPLOYEES.map(e => [String(e.idnum), e]));
+
+    for (const fname of files){
+      const reasonTitle = String(fname).replace(/\.[^/.]+$/, '');
+
+      const headers = [
+        'Дата','Таб.№','ФИО','Дата рождения','Профессия',
+        'Вид инструктажа','Причина проведения инструктажа',
+        'ФИО инструктора','Подпись инструктора','Подпись работника'
+      ];
+      const aoa = [headers];
+
+      // сотрудники текущего отдела (если выбран)
+      const emps = EMPLOYEES.filter(e => !dept || e.orgunit_id === dept);
+
+      emps.forEach(emp=>{
+        // находим запись именно по этому файлу
+        const rec = monthRecs.find(r => String(r.idnum)===String(emp.idnum) && sameFile(r.file, fname));
+
+        let dt = '';
+        if (rec && rec.signed_at){
+          const d = new Date(rec.signed_at);
+          dt = `${pad2(d.getDate())}.${pad2(d.getMonth()+1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        }
+
+        // Формируем полный URL для подписей
+        // rec.signatureLink из БД уже содержит 'signatures/filename.png'
+        const baseUrl = window.location.origin; // https://instr.omgtb.kz
+        const instrUrl  = rec && rec.instrSignatureLink ? `${baseUrl}/${rec.instrSignatureLink}` : '';
+        const workerUrl = rec && rec.signatureLink      ? `${baseUrl}/${rec.signatureLink}` : '';
+        
+        // Логика для инструктора:
+        // Если instructorName передан (CHIEF) - используем его и подпись с сервера
+        // Если null (ADMIN/GLOBAL) - берём из БД (rec.instrSignatureLink)
+        let instructorNameCell = '';
+        let instructorSigCell = '';
+        
+        if (rec) { // Только если сотрудник прошёл инструктаж
+          if (instructorName !== null) {
+            // CHIEF: используем данные из модального окна
+            instructorNameCell = instructorName;
+            // instructorSignature теперь это URL (instructor_signatures/...)
+            const instructorSigUrl = `${baseUrl}/${instructorSignature}`;
+            instructorSigCell = {t:'s', v:'✍️ Посмотреть подпись', l:{Target:instructorSigUrl}};
+          } else {
+            // ADMIN/GLOBAL: берём из БД
+            instructorNameCell = rec.instructorName || '';
+            instructorSigCell = instrUrl ? {t:'s',v:'✍️ Посмотреть подпись',l:{Target:instrUrl}} : '';
+          }
+        }
+        
+        // Год рождения: сначала из записи, иначе из справочника сотрудников
+        const birthDate = formatBirthDate(
+          rec ? rec.birth_date : undefined,
+          emp.birth_date,
+          rec ? rec.birth_year : undefined,
+          emp.birth_year
+        );
+
+        aoa.push([
+          dt,                     // Дата
+          emp.idnum,              // Таб. №
+          emp.fio || '',          // ФИО
+          birthDate,              // Дата рождения
+          emp.profession || '',   // Профессия
+          typeRu,                 // Вид
+          reasonTitle,            // Причина = имя файла без расширения
+          instructorNameCell,     // ФИО инструктора
+          instructorSigCell,      // Подпись инструктора
+          workerUrl ? {t:'s',v:'✍️ Посмотреть подпись',l:{Target:workerUrl}} : ''
+        ]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      // подберём ширины колонок
+      ws['!cols'] = headers.map((_,j)=>{
+        let m=headers[j].length;
+        for (let i=1;i<aoa.length;i++){
+          const l = (aoa[i][j] ? String(aoa[i][j]).length : 0);
+          if (l>m) m=l;
+        }
+        return { wch: m+2 };
+      });
+
+      // имя листа (<=31 символ, уникальное)
+      let sheetName = String(fname).slice(0,31);
+      let n=2;
+      while (wb.SheetNames.includes(sheetName)){
+        const suf = ` (${n})`;
+        sheetName = String(fname).slice(0,31-suf.length) + suf;
+        n++;
+      }
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+
+    XLSX.writeFile(wb, `${type}_${ym}.xlsx`);
+  }
+
+
+    async function api(path){
+      const r = await fetch(API + path, { headers: { Authorization: 'Bearer ' + token }});
+      if (r.status === 401){ localStorage.removeItem('dash_token'); location.href='./login.html?to=' + encodeURIComponent('dashboard.html'); return; }
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+
+    async function loadMe(){
+      ME = await api('/api/dashboard/me');
+      console.log('👤 User role:', ME.role, 'Login:', ME.login);
+      els.who.textContent = `${ME.login}`;
+      
+      // CHIEF — скрыть выбор подразделения и ПОКАЗАТЬ кнопку экспорта
+      if (ME.role === 'CHIEF'){
+        if (els.deptWrap) els.deptWrap.style.display = 'none';
+          if (els.upload) {
+            els.upload.style.display = 'none';
+            console.log('🚫 Upload button hidden for CHIEF');
+          }
+        if (els.export) {
+          els.export.style.display = '';
+          console.log('✅ Showing export button for CHIEF');
+        }
+      } else if (ME.role === 'GLOBAL') {
+        if (els.export) {
+          els.export.remove();
+          delete els.export;
+          console.log('🚫 Export button removed for GLOBAL');
+        }
+      } else {
+        console.log('🚫 Export button hidden for role:', ME.role);
+      }
+      
+      // заполнить месяц по умолчанию
+      if (!els.month.value) els.month.value = yyyymm(new Date());
+    }
+
+    async function loadEmployees(){
+      // для ADMIN можно загрузить без фильтра (все),
+      // для GLOBAL — бек сам ограничит по компании (если scope_company_id установлен),
+      // для CHIEF — бек ограничит по company/orgunit.
+      // ВАЖНО: НЕ фильтруем на сервере по выбранному подразделению,
+      // чтобы список подразделений не сужался и не исчезали другие опции.
+      const data = await api('/api/dashboard/employees');
+      EMPLOYEES = data;
+      // заполнить список подразделений (только не для CHIEF)
+      if (ME.role !== 'CHIEF'){
+        const prev = els.dept.value;
+        const uniq = Array.from(new Map(data.filter(x=>x.orgunit_id).map(x=>[x.orgunit_id, x.orgunit_name])).entries())
+                          .map(([id,name])=>({id,name}))
+                          .sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+        els.dept.innerHTML = '<option value="">—Все—</option>' + uniq.map(o=>`<option value="${o.id}">${o.name}</option>`).join('');
+        // пытаемся восстановить выбор пользователя
+        if (prev && Array.from(els.dept.options).some(opt=>opt.value===String(prev))) {
+          els.dept.value = String(prev);
+        }
+      }
+    }
+
+    async function loadRecords(){
+      const qs = new URLSearchParams();
+      if (els.month.value) qs.set('month', els.month.value);
+      if (els.type.value)  qs.set('type',  els.type.value);
+      const data = await api('/api/dashboard/records' + (qs.toString()?`?${qs}`:''));
+      RECORDS = data;
+    }
+
+
+    // привязываем кнопки
+if (els.export) els.export.onclick = exportMonthWorkbook;
+els.logout.onclick = () => { 
+  // Удалить FCM токен при logout (для Android app)
+  if (typeof AndroidBridge !== 'undefined' && AndroidBridge.unregisterFCMToken) {
+    try {
+      const token = localStorage.getItem('dash_token');
+      if (token) {
+        AndroidBridge.unregisterFCMToken(token);
+        console.log('✅ FCM token unregistration requested');
+      }
+    } catch (e) {
+      console.error('❌ Error calling AndroidBridge:', e);
+    }
+  }
+  
+  localStorage.removeItem('dash_token'); 
+  location.href = './login.html?to=' + encodeURIComponent('dashboard.html'); 
+};
+
+// Подключаем SSE для real-time обновлений
+function connectSSE() {
+  // ВРЕМЕННО ОТКЛЮЧЕНО - SSE вызывает ошибки 401
+  console.log('SSE отключено (требует исправления бэкенда)');
+  return;
+  
+  const token = localStorage.getItem('dash_token');
+  if (!token) {
+    console.log('SSE: токен не найден, подключение невозможно');
+    return;
+  }
+  
+  console.log('SSE: подключаемся с токеном длины', token.length);
+  
+  // Закрываем предыдущее подключение если есть
+  if (eventSource) {
+    eventSource.close();
+  }
+  
+  // EventSource не поддерживает кастомные заголовки, передаём токен через query параметр
+  const url = `/api/dashboard/events?token=${encodeURIComponent(token)}`;
+  console.log('SSE: создаём EventSource для', url.substring(0, 50) + '...');
+  eventSource = new EventSource(url);
+  
+  eventSource.onopen = () => {
+    console.log('SSE подключено — дэшборд будет обновляться автоматически');
+  };
+  
+  eventSource.onmessage = async (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'connected') {
+        console.log('SSE: соединение установлено');
+        return;
+      }
+      
+      if (data.type === 'record_added') {
+        console.log('SSE: новая запись', data);
+        
+        // Перезагружаем записи и обновляем матрицу без полной перезагрузки страницы
+        await loadRecords();
+        renderMatrix(false); // false = не обновлять данные с сервера, только перерисовать
+      }
+    } catch (e) {
+      console.error('Ошибка обработки SSE события:', e);
+    }
+  };
+  
+  eventSource.onerror = (e) => {
+    console.warn('SSE ошибка, переподключение через 5 сек...', e);
+    eventSource.close();
+    setTimeout(connectSSE, 5000);
+  };
+}
+
+// стартуем страницу
+(async () => {
+  try {
+    await loadMe();          // заполнит who + поставит month = текущий
+    await loadEmployees();   // под роль
+    await loadRecords();     // под выбранные фильтры (месяц/тип)
+    renderMatrix(true);      // первичная отрисовка матрицы
+    connectSSE();            // подключаем real-time обновления
+  } catch (e) {
+    els.hint.textContent = 'Ошибка: ' + (e.message || e);
+  }
+})();
+
+// Закрываем SSE при выходе со страницы
+window.addEventListener('beforeunload', () => {
+  if (eventSource) {
+    eventSource.close();
+  }
+});
+
+  </script>
+</body>
+</html>

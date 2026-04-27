@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FCM Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .log { border: 1px solid #ccc; padding: 10px; margin: 10px 0; background: #f5f5f5; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>FCM Token Test</h1>
+    
+    <div>
+        <button onclick="testAndroidInterface()">1. Проверить Android Interface</button>
+        <button onclick="requestFCMToken()">2. Запросить FCM Token</button>
+        <button onclick="registerToken()">3. Зарегистрировать на сервере</button>
+        <button onclick="clearLogs()">Очистить</button>
+    </div>
+    
+    <h3>Logs:</h3>
+    <div id="logs"></div>
+    
+    <script>
+        let fcmToken = null;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const time = new Date().toLocaleTimeString();
+            logs.innerHTML += `<div class="log ${type}">[${time}] ${message}</div>`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+        
+        function testAndroidInterface() {
+            log('Проверяю Android Interface...', 'info');
+            
+            if (typeof AndroidBridge !== 'undefined') {
+                log('✅ AndroidBridge найден!', 'success');
+                
+                // Проверяем методы
+                if (typeof AndroidBridge.registerFCMToken === 'function') {
+                    log('✅ AndroidBridge.registerFCMToken() доступен', 'success');
+                } else {
+                    log('❌ AndroidBridge.registerFCMToken() НЕ найден', 'error');
+                }
+                
+                if (typeof AndroidBridge.getFCMToken === 'function') {
+                    log('✅ AndroidBridge.getFCMToken() доступен', 'success');
+                } else {
+                    log('❌ AndroidBridge.getFCMToken() НЕ найден', 'error');
+                }
+            } else {
+                log('❌ AndroidBridge НЕ найден! Открой эту страницу в Android WebView', 'error');
+            }
+        }
+        
+        function requestFCMToken() {
+            log('Запрашиваю FCM токен...', 'info');
+            
+            if (typeof AndroidBridge === 'undefined') {
+                log('❌ AndroidBridge недоступен!', 'error');
+                return;
+            }
+            
+            if (typeof AndroidBridge.getFCMToken !== 'function') {
+                log('❌ AndroidBridge.getFCMToken() не найден!', 'error');
+                return;
+            }
+            
+            try {
+                const token = AndroidBridge.getFCMToken();
+                if (token) {
+                    fcmToken = token;
+                    log(`✅ FCM Token получен: ${token.substring(0, 50)}...`, 'success');
+                    log(`Полный токен: ${token}`, 'info');
+                } else {
+                    log('⚠️ FCM токен еще не готов. Подожди пару секунд и попробуй снова.', 'info');
+                }
+            } catch (e) {
+                log(`❌ Ошибка вызова getFCMToken(): ${e}`, 'error');
+            }
+        }
+        
+        // Callback который вызывает Android
+        function onFCMTokenReceived(token) {
+            fcmToken = token;
+            log(`✅ FCM Token получен: ${token.substring(0, 50)}...`, 'success');
+            log(`Полный токен: ${token}`, 'info');
+        }
+        
+        async function registerToken() {
+            if (!fcmToken) {
+                log('❌ FCM токен не получен! Сначала нажми "Запросить FCM Token"', 'error');
+                return;
+            }
+            
+            log('Регистрирую токен на сервере...', 'info');
+            
+            // Получаем JWT токен из localStorage
+            const jwtToken = localStorage.getItem('token');
+            if (!jwtToken) {
+                log('❌ JWT токен не найден! Сначала залогинься', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/fcm/register-device', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwtToken}`
+                    },
+                    body: JSON.stringify({
+                        token: fcmToken,
+                        device_info: {
+                            platform: 'android',
+                            timestamp: new Date().toISOString()
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ Токен зарегистрирован на сервере! ${JSON.stringify(data)}`, 'success');
+                } else {
+                    log(`❌ Ошибка регистрации: ${response.status} - ${JSON.stringify(data)}`, 'error');
+                }
+            } catch (e) {
+                log(`❌ Ошибка запроса: ${e}`, 'error');
+            }
+        }
+        
+        // Автоматическая проверка при загрузке
+        window.onload = function() {
+            log('Страница загружена. Нажми кнопки для проверки FCM', 'info');
+            testAndroidInterface();
+        };
+    </script>
+</body>
+</html>

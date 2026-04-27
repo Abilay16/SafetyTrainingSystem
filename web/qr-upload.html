@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR-генератор файлов</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      color: #1a1a2e;
+    }
+
+    /* ── Header ──────────────────────────────── */
+    .header {
+      background: #1565c0;
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .header h1 { font-size: 1.2rem; font-weight: 600; }
+    .user-info { font-size: 0.85rem; opacity: 0.85; }
+    .logout-btn {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: white;
+      padding: 8px 16px;
+      min-height: 40px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .logout-btn:hover { background: rgba(255,255,255,0.3); }
+
+    .back-btn {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.35);
+      color: white;
+      padding: 8px 14px;
+      min-height: 40px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.28); }
+
+    /* ── Login ───────────────────────────────── */
+    #login-section {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .login-card {
+      background: white;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    }
+    .login-card h2 {
+      text-align: center;
+      color: #1565c0;
+      margin-bottom: 8px;
+      font-size: 1.4rem;
+    }
+    .login-card p {
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 28px;
+    }
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .form-group input:focus { border-color: #1565c0; }
+    .btn-primary {
+      width: 100%;
+      background: #1565c0;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 4px;
+      min-height: 48px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-primary:hover { background: #0d47a1; }
+    .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+    .btn-primary:disabled { background: #90a4ae; cursor: not-allowed; }
+    .error-msg {
+      background: #ffebee;
+      color: #c62828;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.88rem;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* ── Main App ────────────────────────────── */
+    #app-section { display: none; padding: 28px 20px; max-width: 900px; margin: 0 auto; }
+
+    /* ── Upload Area ─────────────────────────── */
+    .upload-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .upload-card h2 { font-size: 1.1rem; color: #1565c0; margin-bottom: 20px; }
+
+    .drop-zone {
+      border: 2.5px dashed #90caf9;
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #f8fbff;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #1565c0;
+      background: #e3f2fd;
+    }
+    .drop-zone .icon { font-size: 3rem; margin-bottom: 12px; }
+    .drop-zone p { color: #555; font-size: 0.95rem; }
+    .drop-zone span { color: #1565c0; font-weight: 600; cursor: pointer; }
+    .drop-zone .hint { font-size: 0.8rem; color: #999; margin-top: 8px; }
+
+    #file-input { display: none; }
+
+    .selected-file {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: #e8f5e9;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-top: 16px;
+    }
+    .selected-file .file-icon { font-size: 1.6rem; }
+    .selected-file .file-name { font-weight: 500; flex: 1; word-break: break-all; }
+    .selected-file .file-size { color: #666; font-size: 0.85rem; white-space: nowrap; }
+    .clear-file {
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: #888;
+      padding: 2px 6px;
+    }
+
+    .upload-btn {
+      display: block;
+      width: 100%;
+      background: #1565c0;
+      color: white;
+      border: none;
+      padding: 13px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 18px;
+      min-height: 48px;
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .upload-btn:hover { background: #0d47a1; }
+    .upload-btn:active:not(:disabled) { transform: scale(0.98); }
+    .upload-btn:disabled { background: #90a4ae; cursor: not-allowed; }
+
+    .progress-bar-wrap {
+      display: none;
+      margin-top: 14px;
+      background: #e0e0e0;
+      border-radius: 8px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #1565c0;
+      width: 0%;
+      transition: width 0.3s;
+      border-radius: 8px;
+    }
+
+    /* ── QR Result ───────────────────────────── */
+    #qr-result {
+      display: none;
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    #qr-result h2 { color: #2e7d32; margin-bottom: 6px; font-size: 1.1rem; }
+    #qr-result .file-name-result { color: #555; font-size: 0.9rem; margin-bottom: 20px; }
+    #qr-result img { max-width: 220px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 16px; }
+    .url-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 0 auto 16px;
+      max-width: 480px;
+      text-align: left;
+    }
+    .url-box a {
+      flex: 1;
+      color: #1565c0;
+      text-decoration: none;
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+    .copy-btn {
+      background: #e3f2fd;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      color: #1565c0;
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .copy-btn:hover { background: #bbdefb; }
+    .download-qr-btn {
+      background: none;
+      border: 1.5px solid #1565c0;
+      color: #1565c0;
+      padding: 8px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      margin-right: 8px;
+      transition: all 0.2s;
+    }
+    .download-qr-btn:hover { background: #e3f2fd; }
+    .upload-more-btn {
+      background: #1565c0;
+      border: none;
+      color: white;
+      padding: 9px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    .upload-more-btn:hover { background: #0d47a1; }
+
+    /* ── Files List ──────────────────────────── */
+    .files-card {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .files-card h2 { font-size: 1.1rem; color: #1565c0; margin-bottom: 18px; }
+
+    .files-list { display: flex; flex-direction: column; gap: 10px; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #fafafa;
+      border: 1px solid #eeeeee;
+      border-radius: 10px;
+      transition: background 0.15s;
+    }
+    .file-item:hover { background: #f0f7ff; }
+    .file-item .ficon { font-size: 1.4rem; }
+    .file-item .finfo { flex: 1; min-width: 0; }
+    .file-item .fname { font-weight: 500; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-item .fmeta { font-size: 0.78rem; color: #888; margin-top: 2px; }
+    .file-item .factions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+    .btn-qr {
+      background: #e3f2fd;
+      border: none;
+      color: #1565c0;
+      padding: 8px 14px;
+      min-height: 36px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-qr:hover { background: #bbdefb; }
+    .btn-open {
+      background: #e8f5e9;
+      border: none;
+      color: #2e7d32;
+      padding: 8px 14px;
+      min-height: 36px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-open:hover { background: #c8e6c9; }
+    .btn-del {
+      background: #ffebee;
+      border: none;
+      color: #c62828;
+      padding: 8px 14px;
+      min-height: 36px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-del:hover { background: #ffcdd2; }
+
+    .empty-state {
+      text-align: center;
+      color: #aaa;
+      padding: 30px;
+      font-size: 0.92rem;
+    }
+
+    /* ── Modal (QR viewer) ───────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 16px;
+      padding: 32px 28px;
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+    }
+    .modal h3 { color: #1565c0; margin-bottom: 6px; font-size: 1rem; }
+    .modal .modal-fname { color: #555; font-size: 0.85rem; margin-bottom: 18px; word-break: break-all; }
+    .modal img { max-width: 200px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 16px; }
+    .modal .url-box { margin: 0 auto 14px; }
+    .modal-close {
+      background: #f5f5f5;
+      border: none;
+      padding: 9px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .modal-close:hover { background: #e0e0e0; }
+
+    .spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 480px) {
+      #app-section { padding: 16px 12px; }
+      .upload-card, .files-card, #qr-result { padding: 20px 16px; }
+    }
+
+    /* ── Tabs ────────────────────────────────── */
+    .tab-switcher {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      background: white;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #666;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: #1565c0;
+      border-color: #1565c0;
+      color: white;
+    }
+
+    /* ── Bundle Card ─────────────────────────── */
+    .bundle-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .bundle-card h2 { font-size: 1.1rem; color: #1565c0; margin-bottom: 20px; }
+
+    .bundle-form-group { margin-bottom: 14px; }
+    .bundle-form-group label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .bundle-form-group input, .bundle-form-group textarea {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      resize: none;
+    }
+    .bundle-form-group input:focus, .bundle-form-group textarea:focus { border-color: #1565c0; }
+
+    .btn-create-bundle {
+      width: 100%;
+      background: #1565c0;
+      color: white;
+      border: none;
+      padding: 13px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background 0.2s;
+    }
+    .btn-create-bundle:hover { background: #0d47a1; }
+    .btn-create-bundle:disabled { background: #90a4ae; cursor: not-allowed; }
+
+    /* Active bundle state */
+    .bundle-active-header {
+      display: none;
+      background: #e8f5e9;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+    }
+    .bundle-active-header .bname {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #1b5e20;
+    }
+    .bundle-active-header .burl {
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bundle-active-header .burl a {
+      font-size: 0.82rem;
+      color: #1565c0;
+      word-break: break-all;
+      flex: 1;
+    }
+    .bundle-qr-wrap {
+      display: none;
+      text-align: center;
+      margin-bottom: 18px;
+    }
+    .bundle-qr-wrap img {
+      max-width: 180px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .bundle-drop-zone {
+      border: 2.5px dashed #90caf9;
+      border-radius: 12px;
+      padding: 26px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #f8fbff;
+      margin-bottom: 14px;
+      display: none;
+    }
+    .bundle-drop-zone:hover, .bundle-drop-zone.dragover {
+      border-color: #1565c0;
+      background: #e3f2fd;
+    }
+    .bundle-drop-zone .icon { font-size: 2.2rem; margin-bottom: 8px; }
+    .bundle-drop-zone p { color: #555; font-size: 0.9rem; }
+    .bundle-drop-zone p span { color: #1565c0; font-weight: 600; }
+    #bundle-file-input { display: none; }
+
+    .bundle-files-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .bundle-file-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+    .bundle-file-item .ficon { font-size: 1.3rem; flex-shrink: 0; }
+    .bundle-file-item .finfo { flex: 1; min-width: 0; }
+    .bundle-file-item .fname { font-size: 0.88rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bundle-file-item .fmeta { font-size: 0.75rem; color: #aaa; }
+    .bundle-file-item .btn-del { background: #ffebee; border: none; color: #c62828; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.77rem; }
+    .bundle-file-item .btn-del:hover { background: #ffcdd2; }
+
+    .btn-finish-bundle {
+      margin-top: 18px;
+      width: 100%;
+      background: transparent;
+      border: 2px solid #1565c0;
+      color: #1565c0;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 0.93rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-finish-bundle:hover { background: #e3f2fd; }
+
+    /* ── Bundles list ────────────────────────── */
+    .bundles-card {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      margin-top: 20px;
+    }
+    .bundles-card h2 { font-size: 1.1rem; color: #1565c0; margin-bottom: 18px; }
+    .bundle-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      transition: background 0.15s;
+    }
+    .bundle-item:hover { background: #f0f7ff; }
+    .bundle-item .bicon { font-size: 1.6rem; flex-shrink: 0; }
+    .bundle-item .binfo { flex: 1; min-width: 0; }
+    .bundle-item .bname-li { font-weight: 600; font-size: 0.93rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bundle-item .bmeta { font-size: 0.77rem; color: #94a3b8; margin-top: 2px; }
+    .bundle-item .bactions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+
+    /* ── Bundle Files Modal ───────────────────────────────────── */
+    .bfm-file-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 9px;
+      margin-bottom: 8px;
+    }
+    .bfm-file-item .ficon { font-size: 1.3rem; flex-shrink: 0; }
+    .bfm-file-item .finfo { flex: 1; min-width: 0; }
+    .bfm-file-item .fname { font-size: 0.88rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bfm-file-item .fmeta { font-size: 0.75rem; color: #aaa; }
+    .bfm-file-item .btn-del { background: #ffebee; border: none; color: #c62828; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.77rem; flex-shrink: 0; }
+    .bfm-file-item .btn-del:hover { background: #ffcdd2; }
+    .bfm-drop {
+      border: 2px dashed #90caf9;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #f8fbff;
+      margin-top: 14px;
+      font-size: 0.9rem;
+      color: #555;
+    }
+    .bfm-drop:hover, .bfm-drop.dragover { border-color: #1565c0; background: #e3f2fd; }
+    .bfm-drop span { color: #1565c0; font-weight: 600; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN ───────────────────────────────────────────────────────────── -->
+<section id="login-section">
+  <div class="login-card">
+    <a href="/инструктаж.html" style="display:inline-flex;align-items:center;gap:5px;font-size:0.85rem;color:#1565c0;text-decoration:none;margin-bottom:12px;">← Назад к инструктажам</a>
+    <h2>QR-генератор файлов</h2>
+    <p>Войдите для загрузки файлов и получения QR-кодов</p>
+    <div class="error-msg" id="login-error"></div>
+    <div class="form-group">
+      <label for="login-input">Логин</label>
+      <input type="text" id="login-input" placeholder="user1" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label for="pass-input">Пароль</label>
+      <input type="password" id="pass-input" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" id="login-btn" onclick="doLogin()">Войти</button>
+  </div>
+</section>
+
+<!-- ── APP ─────────────────────────────────────────────────────────────── -->
+<div id="app-header" style="display:none">
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:14px">
+      <a class="back-btn" href="/инструктаж.html" title="Вернуться к инструктажам">← Инструктажи</a>
+      <h1>📄 QR-генератор файлов</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span class="user-info" id="header-user"></span>
+      <button class="logout-btn" onclick="doLogout()">Выйти</button>
+    </div>
+  </div>
+</div>
+
+<section id="app-section">
+
+  <!-- Tab switcher -->
+  <div class="tab-switcher">
+    <button class="tab-btn active" id="tab-file" onclick="switchTab('file')">📄 Файл</button>
+    <button class="tab-btn" id="tab-bundle" onclick="switchTab('bundle')">📦 Пакет</button>
+  </div>
+
+  <!-- Upload card -->
+  <div class="upload-card">
+    <h2>Загрузить файл и получить QR-код</h2>
+    <div class="drop-zone" id="drop-zone"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+         onclick="document.getElementById('file-input').click()">
+      <div class="icon">📂</div>
+      <p>Перетащите файл сюда или <span>выберите файл</span></p>
+      <p class="hint">PDF, DOC, DOCX, изображения, видео, Excel, PowerPoint — до 100 МБ</p>
+    </div>
+    <input type="file" id="file-input" onchange="onFileSelected(event)">
+
+    <div class="selected-file" id="selected-file">
+      <span class="file-icon" id="sel-icon">📄</span>
+      <span class="file-name" id="sel-name"></span>
+      <span class="file-size" id="sel-size"></span>
+      <button class="clear-file" onclick="clearFile()" title="Убрать файл">✕</button>
+    </div>
+
+    <div class="progress-bar-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <button class="upload-btn" id="upload-btn" disabled onclick="doUpload()">
+      Загрузить и создать QR
+    </button>
+  </div>
+
+  <!-- Bundle card -->
+  <div class="bundle-card" id="bundle-card">
+    <h2>Создать пакет документов</h2>
+
+    <!-- Create form (shown before bundle created) -->
+    <div id="bundle-create-form">
+      <div class="bundle-form-group">
+        <label>Название пакета *</label>
+        <input type="text" id="bundle-name-input" placeholder="Например: Инструктажи по ТБ 2025">
+      </div>
+      <div class="bundle-form-group">
+        <label>Описание (необязательно)</label>
+        <textarea id="bundle-desc-input" rows="2" placeholder="Краткое описание содержимого"></textarea>
+      </div>
+      <button class="btn-create-bundle" id="btn-create-bundle" onclick="doCreateBundle()">📦 Создать пакет и получить QR</button>
+    </div>
+
+    <!-- Active bundle (shown after creation) -->
+    <div class="bundle-active-header" id="bundle-active-header">
+      <div class="bname" id="bundle-active-name"></div>
+      <div class="burl">
+        <a id="bundle-active-link" href="" target="_blank"></a>
+        <button class="copy-btn" onclick="copyBundleUrl()">Копировать</button>
+      </div>
+    </div>
+
+    <div class="bundle-qr-wrap" id="bundle-qr-wrap">
+      <img id="bundle-qr-img" src="" alt="QR-код пакета">
+      <br>
+      <button class="download-qr-btn" onclick="downloadBundleQR()">⬇ Скачать QR</button>
+    </div>
+
+    <div class="bundle-drop-zone" id="bundle-drop-zone"
+         ondragover="onBundleDragOver(event)" ondragleave="onBundleDragLeave(event)" ondrop="onBundleDrop(event)"
+         onclick="document.getElementById('bundle-file-input').click()">
+      <div class="icon">📎</div>
+      <p>Перетащите файлы или <span>выберите файлы</span> для добавления в пакет</p>
+    </div>
+    <input type="file" id="bundle-file-input" multiple onchange="onBundleFilesSelected(event)">
+
+    <div class="bundle-files-list" id="bundle-files-list"></div>
+
+    <button class="btn-finish-bundle" id="btn-finish-bundle" style="display:none" onclick="finishBundle()">✓ Готово — начать новый пакет</button>
+  </div>
+
+  <!-- QR Result -->
+  <div id="qr-result">
+    <h2>✅ QR-код создан!</h2>
+    <p class="file-name-result" id="qr-filename"></p>
+    <img id="qr-img" src="" alt="QR-код">
+    <div class="url-box">
+      <a id="qr-link" href="" target="_blank"></a>
+      <button class="copy-btn" onclick="copyUrl()">Копировать</button>
+    </div>
+    <button class="download-qr-btn" onclick="downloadQR()">⬇ Скачать QR</button>
+    <button class="upload-more-btn" onclick="resetUpload()">Загрузить ещё</button>
+  </div>
+
+  <!-- Files list -->
+  <div class="files-card" id="files-card">
+    <h2>Мои файлы</h2>
+    <div class="files-list" id="files-list">
+      <div class="empty-state">Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- Bundles list -->
+  <div class="bundles-card" id="bundles-card" style="display:none">
+    <h2>📦 Мои пакеты</h2>
+    <div id="bundles-list"><div class="empty-state">Загрузка...</div></div>
+  </div>
+
+</section>
+
+<!-- ── QR Modal ────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <h3>QR-код файла</h3>
+    <div class="modal-fname" id="modal-fname"></div>
+    <img id="modal-qr" src="" alt="QR">
+    <div class="url-box">
+      <a id="modal-link" href="" target="_blank"></a>
+      <button class="copy-btn" onclick="copyModalUrl()">Копировать</button>
+    </div>
+    <button class="modal-close" onclick="document.getElementById('modal-overlay').classList.remove('open')">Закрыть</button>
+  </div>
+</div>
+
+<!-- ── Bundle Files Modal ────────────────────────────────────────────── -->
+<div class="modal-overlay" id="bfm-overlay" onclick="closeBfm(event)">
+  <div class="modal" style="max-width:500px;text-align:left;max-height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+      <h3 style="color:#1565c0;font-size:1rem;margin:0" id="bfm-title">Файлы пакета</h3>
+      <button class="modal-close" style="padding:6px 14px" onclick="document.getElementById('bfm-overlay').classList.remove('open')">✕</button>
+    </div>
+    <input type="hidden" id="bfm-bundle-id">
+    <div id="bfm-files-list" style="overflow-y:auto;flex:1;min-height:60px"><div class="empty-state">Загрузка...</div></div>
+
+    <div style="flex-shrink:0">
+      <div class="bfm-drop" id="bfm-drop"
+           ondragover="bfmDragOver(event)" ondragleave="bfmDragLeave(event)" ondrop="bfmDrop(event)"
+           onclick="document.getElementById('bfm-file-input').click()">
+        📎 Перетащите файлы или <span>выберите</span> для добавления
+      </div>
+      <input type="file" id="bfm-file-input" multiple style="display:none" onchange="bfmFilesSelected(event)">
+      <div id="bfm-upload-status" style="font-size:0.83rem;color:#1565c0;margin-top:8px;min-height:18px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Bundle Modal ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="edit-bundle-overlay" onclick="closeEditModal(event)">
+  <div class="modal" style="max-width:440px;text-align:left">
+    <h3 style="color:#1565c0;margin-bottom:18px">✏️ Редактировать пакет</h3>
+    <input type="hidden" id="edit-bundle-id">
+    <div class="bundle-form-group">
+      <label>Название *</label>
+      <input type="text" id="edit-bundle-name" placeholder="Название пакета">
+    </div>
+    <div class="bundle-form-group">
+      <label>Описание</label>
+      <textarea id="edit-bundle-desc" rows="2" placeholder="Краткое описание"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn-primary" id="edit-bundle-save-btn" style="margin-top:0" onclick="saveEditBundle()">Сохранить</button>
+      <button class="modal-close" onclick="document.getElementById('edit-bundle-overlay').classList.remove('open')">Отмена</button>
+    </div>
+    <div id="edit-bundle-error" style="color:#c62828;font-size:0.85rem;margin-top:10px;display:none"></div>
+  </div>
+</div>
+
+<script>
+  /* ── Helpers ──────────────────────────────────────────────────── */
+  const API = '';  // same origin
+
+  function getToken() { return localStorage.getItem('qr_token'); }
+  function setToken(t) { localStorage.setItem('qr_token', t); }
+  function removeToken() { localStorage.removeItem('qr_token'); }
+
+  function authHeaders() {
+    return { 'Authorization': 'Bearer ' + getToken() };
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' Б';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+    return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  function fileIcon(name) {
+    const ext = (name || '').split('.').pop().toLowerCase();
+    const map = { pdf:'📕', doc:'📘', docx:'📘', xls:'📗', xlsx:'📗', ppt:'📙', pptx:'📙',
+                  jpg:'🖼', jpeg:'🖼', png:'🖼', gif:'🖼', webp:'🖼',
+                  mp4:'🎬', avi:'🎬', mov:'🎬', webm:'🎬', txt:'📄' };
+    return map[ext] || '📎';
+  }
+
+  /* ── Auth ─────────────────────────────────────────────────────── */
+  window.addEventListener('load', () => {
+    if (getToken()) {
+      showApp();
+    }
+  });
+
+  async function doLogin() {
+    const btn = document.getElementById('login-btn');
+    const errEl = document.getElementById('login-error');
+    const login = document.getElementById('login-input').value.trim();
+    const pass  = document.getElementById('pass-input').value;
+
+    if (!login || !pass) {
+      showError('Введите логин и пароль');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Входим...';
+    errEl.style.display = 'none';
+
+    try {
+      const fd = new FormData();
+      fd.append('username', login);
+      fd.append('password', pass);
+
+      const res = await fetch('/api/auth/login', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError(data.detail || 'Неверный логин или пароль');
+        return;
+      }
+
+      // Проверяем роль
+      if (!['QR_UPLOADER', 'ADMIN', 'GLOBAL'].includes(data.role)) {
+        showError('У этого аккаунта нет доступа к QR-генератору');
+        return;
+      }
+
+      setToken(data.access_token);
+      localStorage.setItem('qr_user', login);
+      localStorage.setItem('qr_role', data.role);
+      showApp();
+
+    } catch(e) {
+      showError('Ошибка соединения с сервером');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Войти';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function showApp() {
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('app-header').style.display = 'block';
+    document.getElementById('app-section').style.display = 'block';
+    const user = localStorage.getItem('qr_user') || '';
+    document.getElementById('header-user').textContent = user;
+    loadFiles();
+  }
+
+  function doLogout() {
+    removeToken();
+    localStorage.removeItem('qr_user');
+    localStorage.removeItem('qr_role');
+    location.reload();
+  }
+
+  // Enter key on login form
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('pass-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+    document.getElementById('login-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('pass-input').focus();
+    });
+  });
+
+  /* ── File selection ───────────────────────────────────────────── */
+  let selectedFile = null;
+
+  function onFileSelected(e) {
+    const file = e.target.files[0];
+    if (file) setFile(file);
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.add('dragover');
+  }
+
+  function onDragLeave(e) {
+    document.getElementById('drop-zone').classList.remove('dragover');
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  }
+
+  function setFile(file) {
+    selectedFile = file;
+    document.getElementById('sel-icon').textContent = fileIcon(file.name);
+    document.getElementById('sel-name').textContent = file.name;
+    document.getElementById('sel-size').textContent = formatSize(file.size);
+    document.getElementById('selected-file').style.display = 'flex';
+    document.getElementById('upload-btn').disabled = false;
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('selected-file').style.display = 'none';
+    document.getElementById('upload-btn').disabled = true;
+  }
+
+  /* ── Upload ───────────────────────────────────────────────────── */
+  async function doUpload() {
+    if (!selectedFile) return;
+
+    const btn = document.getElementById('upload-btn');
+    const progressWrap = document.getElementById('progress-wrap');
+    const progressBar  = document.getElementById('progress-bar');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Загружаем...';
+    progressWrap.style.display = 'block';
+
+    // Animate progress (fake until xhr)
+    let prog = 0;
+    const interval = setInterval(() => {
+      prog = Math.min(prog + Math.random() * 8, 85);
+      progressBar.style.width = prog + '%';
+    }, 200);
+
+    try {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+
+      const res = await fetch('/api/qr/upload', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: fd,
+      });
+
+      clearInterval(interval);
+      progressBar.style.width = '100%';
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 401) { doLogout(); return; }
+        alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+        resetUploadUI();
+        return;
+      }
+
+      // Show QR result
+      _qrResultVisible = true;
+      document.querySelector('.upload-card').style.display = 'none';
+      const qrSection = document.getElementById('qr-result');
+      qrSection.style.display = 'block';
+      document.getElementById('qr-filename').textContent = data.original_name;
+      document.getElementById('qr-img').src = 'data:image/png;base64,' + data.qr_base64;
+      document.getElementById('qr-link').href = data.file_url;
+      document.getElementById('qr-link').textContent = data.file_url;
+
+      // Store for download
+      qrSection.dataset.qrBase64 = data.qr_base64;
+      qrSection.dataset.fileName = data.original_name;
+
+      // Refresh list
+      loadFiles();
+
+    } catch(e) {
+      clearInterval(interval);
+      alert('Ошибка соединения: ' + e.message);
+      resetUploadUI();
+    }
+  }
+
+  function resetUploadUI() {
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = !selectedFile;
+    btn.textContent = 'Загрузить и создать QR';
+    document.getElementById('progress-wrap').style.display = 'none';
+    document.getElementById('progress-bar').style.width = '0%';
+  }
+
+  function resetUpload() {
+    _qrResultVisible = false;
+    clearFile();
+    resetUploadUI();
+    document.querySelector('.upload-card').style.display = 'block';
+    document.getElementById('qr-result').style.display = 'none';
+  }
+
+  function copyUrl() {
+    const url = document.getElementById('qr-link').href;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.querySelector('.url-box .copy-btn');
+      btn.textContent = '✓ Скопировано';
+      setTimeout(() => btn.textContent = 'Копировать', 2000);
+    });
+  }
+
+  function downloadQR() {
+    const qrSection = document.getElementById('qr-result');
+    const base64 = qrSection.dataset.qrBase64;
+    const fname = (qrSection.dataset.fileName || 'file').replace(/\.[^.]+$/, '') + '_QR.png';
+    const a = document.createElement('a');
+    a.href = 'data:image/png;base64,' + base64;
+    a.download = fname;
+    a.click();
+  }
+
+  /* ── Files list ───────────────────────────────────────────────── */
+  async function loadFiles() {
+    try {
+      const res = await fetch('/api/qr/files', { headers: authHeaders() });
+      if (res.status === 401) { doLogout(); return; }
+      const data = await res.json();
+      renderFiles(data.files || []);
+    } catch(e) {
+      document.getElementById('files-list').innerHTML =
+        '<div class="empty-state">Ошибка загрузки списка файлов</div>';
+    }
+  }
+
+  function renderFiles(files) {
+    const list = document.getElementById('files-list');
+    if (!files.length) {
+      list.innerHTML = '<div class="empty-state">Нет загруженных файлов</div>';
+      return;
+    }
+    list.innerHTML = files.map(f => `
+      <div class="file-item" id="fi-${f.file_id}">
+        <span class="ficon">${fileIcon(f.original_name)}</span>
+        <div class="finfo">
+          <div class="fname" title="${escHtml(f.original_name)}">${escHtml(f.original_name)}</div>
+          <div class="fmeta">${formatSize(f.file_size)} · ${formatDate(f.uploaded_at)}</div>
+        </div>
+        <div class="factions">
+          <button class="btn-qr" onclick="showQRModal('${f.file_id}','${escHtml(f.original_name)}','${f.file_url}')">QR</button>
+          <a class="btn-open" href="${f.file_url}" target="_blank">Открыть</a>
+          <button class="btn-del" onclick="deleteFile('${f.file_id}')">🗑</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Delete ───────────────────────────────────────────────────── */
+  async function deleteFile(fileId) {
+    if (!confirm('Удалить файл?')) return;
+    try {
+      const res = await fetch('/api/qr/file/' + fileId, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (res.status === 401) { doLogout(); return; }
+      if (res.ok) {
+        document.getElementById('fi-' + fileId)?.remove();
+        const list = document.getElementById('files-list');
+        if (!list.children.length) {
+          list.innerHTML = '<div class="empty-state">Нет загруженных файлов</div>';
+        }
+      } else {
+        const d = await res.json();
+        alert('Ошибка: ' + (d.detail || 'Не удалось удалить'));
+      }
+    } catch(e) {
+      alert('Ошибка соединения');
+    }
+  }
+
+  /* ── QR Modal ─────────────────────────────────────────────────── */
+  async function showQRModal(fileId, fname, fileUrl) {
+    document.getElementById('modal-fname').textContent = fname;
+    document.getElementById('modal-link').href = fileUrl;
+    document.getElementById('modal-link').textContent = fileUrl;
+
+    const modal = document.getElementById('modal-overlay');
+    modal.classList.add('open');
+
+    // Generate QR by re-fetching via our API (simulate by showing loading)
+    const img = document.getElementById('modal-qr');
+    img.src = '';
+    img.alt = 'Загрузка...';
+
+    // Re-upload not needed — generate QR on frontend using a CDN-free approach:
+    // We just show a link and let user use file URL
+    // But let's generate properly via /api/qr/qr-image endpoint
+    try {
+      const res = await fetch('/api/qr/qr-image/' + fileId, { headers: authHeaders() });
+      if (res.ok) {
+        const d = await res.json();
+        img.src = 'data:image/png;base64,' + d.qr_base64;
+        img.alt = 'QR-код';
+      } else {
+        img.alt = 'QR недоступен';
+      }
+    } catch(e) {
+      img.alt = 'Ошибка загрузки QR';
+    }
+  }
+
+  function closeModal(e) {
+    if (e.target === document.getElementById('modal-overlay')) {
+      document.getElementById('modal-overlay').classList.remove('open');
+    }
+  }
+
+  function copyModalUrl() {
+    const url = document.getElementById('modal-link').href;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.querySelector('#modal-overlay .copy-btn');
+      btn.textContent = '✓ Скопировано';
+      setTimeout(() => btn.textContent = 'Копировать', 2000);
+    });
+  }
+
+  /* ── Tab switching ───────────────────────────── */
+  // Track qr-result visibility so tab switching preserves it
+  let _qrResultVisible = false;
+
+  function switchTab(tab) {
+    const isFile = tab === 'file';
+    document.getElementById('tab-file').classList.toggle('active', isFile);
+    document.getElementById('tab-bundle').classList.toggle('active', !isFile);
+
+    if (isFile) {
+      // Restore file tab
+      document.querySelector('.upload-card').style.display = _qrResultVisible ? 'none' : '';
+      document.getElementById('qr-result').style.display = _qrResultVisible ? 'block' : 'none';
+      document.getElementById('files-card').style.display = '';
+      document.getElementById('bundle-card').style.display = 'none';
+      document.getElementById('bundles-card').style.display = 'none';
+    } else {
+      // Save qr-result state and hide file tab stuff
+      _qrResultVisible = document.getElementById('qr-result').style.display === 'block';
+      document.querySelector('.upload-card').style.display = 'none';
+      document.getElementById('qr-result').style.display = 'none';
+      document.getElementById('files-card').style.display = 'none';
+      document.getElementById('bundle-card').style.display = 'block';
+      document.getElementById('bundles-card').style.display = 'block';
+      loadBundles();
+    }
+  }
+
+  /* ── Bundle state ──────────────────────────── */
+  let activeBundleId = null;
+  let activeBundleName = '';
+
+  async function doCreateBundle() {
+    const name = document.getElementById('bundle-name-input').value.trim();
+    if (!name) { alert('Имя пакета обязательно'); return; }
+    const desc = document.getElementById('bundle-desc-input').value.trim();
+    const btn = document.getElementById('btn-create-bundle');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Создаём...';
+    try {
+      const res = await fetch('/api/qr/bundle', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc }),
+      });
+      if (res.status === 401) { doLogout(); return; }
+      if (!res.ok) { const d = await res.json(); alert('Ошибка: ' + (d.detail || res.status)); return; }
+      const data = await res.json();
+      activeBundleId = data.bundle_id;
+      activeBundleName = name;
+      showActiveBundleState(data);
+    } catch(e) {
+      alert('Ошибка соединения: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📦 Создать пакет и получить QR';
+    }
+  }
+
+  function showActiveBundleState(data) {
+    document.getElementById('bundle-create-form').style.display = 'none';
+    const url = location.origin + '/qr/bundle/' + data.bundle_id;
+    const hdr = document.getElementById('bundle-active-header');
+    hdr.style.display = 'block';
+    document.getElementById('bundle-active-name').textContent = '📦 ' + activeBundleName;
+    document.getElementById('bundle-active-link').href = url;
+    document.getElementById('bundle-active-link').textContent = url;
+    if (data.qr_base64) {
+      const wrap = document.getElementById('bundle-qr-wrap');
+      wrap.style.display = 'block';
+      document.getElementById('bundle-qr-img').src = 'data:image/png;base64,' + data.qr_base64;
+      wrap.dataset.qrBase64 = data.qr_base64;
+    }
+    document.getElementById('bundle-drop-zone').style.display = 'block';
+    document.getElementById('btn-finish-bundle').style.display = 'block';
+  }
+
+  function copyBundleUrl() {
+    const url = document.getElementById('bundle-active-link').href;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.getElementById('bundle-active-header').querySelector('.copy-btn');
+      btn.textContent = '✓ Скопировано';
+      setTimeout(() => btn.textContent = 'Копировать', 2000);
+    });
+  }
+
+  function downloadBundleQR() {
+    const wrap = document.getElementById('bundle-qr-wrap');
+    const base64 = wrap.dataset.qrBase64;
+    if (!base64) return;
+    const a = document.createElement('a');
+    a.href = 'data:image/png;base64,' + base64;
+    a.download = activeBundleName.replace(/[^a-zA-Z0-9_Ѐ-ӿ]/g,'_') + '_QR.png';
+    a.click();
+  }
+
+  function finishBundle() {
+    activeBundleId = null;
+    activeBundleName = '';
+    document.getElementById('bundle-name-input').value = '';
+    document.getElementById('bundle-desc-input').value = '';
+    document.getElementById('bundle-create-form').style.display = '';
+    document.getElementById('bundle-active-header').style.display = 'none';
+    document.getElementById('bundle-qr-wrap').style.display = 'none';
+    document.getElementById('bundle-drop-zone').style.display = 'none';
+    document.getElementById('bundle-files-list').innerHTML = '';
+    document.getElementById('btn-finish-bundle').style.display = 'none';
+    loadBundles();
+  }
+
+  /* ── Bundle file upload ──────────────────────── */
+  function onBundleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('bundle-drop-zone').classList.add('dragover');
+  }
+  function onBundleDragLeave() {
+    document.getElementById('bundle-drop-zone').classList.remove('dragover');
+  }
+  function onBundleDrop(e) {
+    e.preventDefault();
+    document.getElementById('bundle-drop-zone').classList.remove('dragover');
+    if (e.dataTransfer.files.length) uploadFilesToBundle(e.dataTransfer.files);
+  }
+  function onBundleFilesSelected(e) {
+    if (e.target.files.length) uploadFilesToBundle(e.target.files);
+    e.target.value = '';
+  }
+
+  async function uploadFilesToBundle(fileList) {
+    if (!activeBundleId) return;
+    for (const file of fileList) {
+      const itemId = 'bf-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      addBundleFileItem(itemId, file.name, 0, null, true);
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/qr/bundle/' + activeBundleId + '/upload', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: fd,
+        });
+        if (res.status === 401) { doLogout(); return; }
+        if (!res.ok) {
+          const d = await res.json();
+          document.getElementById(itemId)?.remove();
+          alert('Ошибка загрузки ' + file.name + ': ' + (d.detail || res.status));
+          continue;
+        }
+        const data = await res.json();
+        const el = document.getElementById(itemId);
+        if (el) {
+          el.querySelector('.fmeta').textContent = formatSize(data.file_size);
+          el.querySelector('.btn-del').onclick = () => deleteBundleFile(data.file_id, itemId);
+          el.querySelector('.btn-del').disabled = false;
+        }
+      } catch(e) {
+        document.getElementById(itemId)?.remove();
+        alert('Ошибка: ' + e.message);
+      }
+    }
+  }
+
+  function addBundleFileItem(itemId, name, size, fileId, uploading) {
+    const list = document.getElementById('bundle-files-list');
+    const div = document.createElement('div');
+    div.className = 'bundle-file-item';
+    div.id = itemId;
+    div.innerHTML = `
+      <span class="ficon">${fileIcon(name)}</span>
+      <div class="finfo">
+        <div class="fname" title="${escHtml(name)}">${escHtml(name)}</div>
+        <div class="fmeta">${uploading ? 'Загрузка...' : formatSize(size)}</div>
+      </div>
+      <button class="btn-del" ${uploading ? 'disabled' : ''} onclick="deleteBundleFile('${fileId}','${itemId}')">🗑</button>
+    `;
+    list.appendChild(div);
+  }
+
+  async function deleteBundleFile(fileId, itemId) {
+    if (!activeBundleId || !fileId) return;
+    if (!confirm('Удалить файл из пакета?')) return;
+    try {
+      const res = await fetch('/api/qr/bundle/' + activeBundleId + '/file/' + fileId, {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      if (res.ok) document.getElementById(itemId)?.remove();
+      else { const d = await res.json(); alert('Ошибка: ' + (d.detail || res.status)); }
+    } catch(e) { alert('Ошибка: ' + e.message); }
+  }
+
+  /* ── Bundles list ────────────────────────────── */
+  async function loadBundles() {
+    try {
+      const res = await fetch('/api/qr/bundles', { headers: authHeaders() });
+      if (res.status === 401) { doLogout(); return; }
+      const data = await res.json();
+      renderBundles(data.bundles || []);
+    } catch(e) {
+      document.getElementById('bundles-list').innerHTML = '<div class="empty-state">Ошибка загрузки</div>';
+    }
+  }
+
+  function renderBundles(bundles) {
+    const el = document.getElementById('bundles-list');
+    if (!bundles.length) {
+      el.innerHTML = '<div class="empty-state">Нет созданных пакетов</div>';
+      return;
+    }
+    el.innerHTML = bundles.map(b => {
+      const url = location.origin + '/qr/bundle/' + b.bundle_id;
+      const cnt = b.file_count || 0;
+      const fcnt = cnt + ' ' + (cnt % 10 === 1 && cnt % 100 !== 11 ? 'файл' : cnt % 10 >= 2 && cnt % 10 <= 4 && (cnt % 100 < 10 || cnt % 100 >= 20) ? 'файла' : 'файлов');
+      return `
+        <div class="bundle-item" id="bi-${b.bundle_id}">
+          <div class="bicon">📦</div>
+          <div class="binfo">
+            <div class="bname-li" title="${escHtml(b.name)}">${escHtml(b.name)}</div>
+            <div class="bmeta">${fcnt} · ${formatDate(b.created_at)}</div>
+          </div>
+          <div class="bactions">
+            <button class="btn-qr" onclick="showBundleQRModal('${b.bundle_id}','${escHtml(b.name)}','${escHtml(url)}')" title="QR">QR</button>
+            <button class="btn-qr" style="background:#e8f5e9;color:#2e7d32" onclick="openBfm('${b.bundle_id}','${escHtml(b.name)}')" title="Управление файлами">📎 Файлы</button>
+            <button class="btn-qr" style="background:#f3e5f5;color:#6a1b9a" onclick="openEditModal('${b.bundle_id}','${escHtml(b.name)}','${escHtml(b.description || '')}')" title="Редактировать">✏️</button>
+            <a class="btn-open" href="${escHtml(url)}" target="_blank" title="Открыть">Ссылка</a>
+            <button class="btn-del" onclick="deleteBundle('${b.bundle_id}')">🗑</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function deleteBundle(bundleId) {
+    if (!confirm('Удалить пакет и все его файлы?')) return;
+    try {
+      const res = await fetch('/api/qr/bundle/' + bundleId, { method: 'DELETE', headers: authHeaders() });
+      if (res.status === 401) { doLogout(); return; }
+      if (res.ok) {
+        document.getElementById('bi-' + bundleId)?.remove();
+        const el = document.getElementById('bundles-list');
+        if (!el.children.length) el.innerHTML = '<div class="empty-state">Нет созданных пакетов</div>';
+      } else { const d = await res.json(); alert('Ошибка: ' + (d.detail || res.status)); }
+    } catch(e) { alert('Ошибка: ' + e.message); }
+  }
+
+  async function showBundleQRModal(bundleId, name, url) {
+    document.getElementById('modal-fname').textContent = name;
+    document.getElementById('modal-link').href = url;
+    document.getElementById('modal-link').textContent = url;
+    const img = document.getElementById('modal-qr');
+    img.src = ''; img.alt = 'Загрузка...';
+    document.getElementById('modal-overlay').classList.add('open');
+    try {
+      const res = await fetch('/api/qr/bundle/' + bundleId + '/qr-image', { headers: authHeaders() });
+      if (res.ok) { const d = await res.json(); img.src = 'data:image/png;base64,' + d.qr_base64; img.alt = 'QR'; }
+      else { img.alt = 'QR недоступен'; }
+    } catch(e) { img.alt = 'Ошибка'; }
+  }
+
+  /* ── Bundle Files Modal (BFM) ─────────────────────────────────── */
+  function openBfm(bundleId, name) {
+    document.getElementById('bfm-bundle-id').value = bundleId;
+    document.getElementById('bfm-title').textContent = 'Файлы: ' + name;
+    document.getElementById('bfm-files-list').innerHTML = '<div class="empty-state">Загрузка...</div>';
+    document.getElementById('bfm-upload-status').textContent = '';
+    document.getElementById('bfm-overlay').classList.add('open');
+    loadBfmFiles(bundleId);
+  }
+
+  function closeBfm(e) {
+    if (!e || e.target === document.getElementById('bfm-overlay')) {
+      document.getElementById('bfm-overlay').classList.remove('open');
+      loadBundles(); // обновляем счётчик файлов в списке
+    }
+  }
+
+  async function loadBfmFiles(bundleId) {
+    try {
+      const res = await fetch('/api/qr/bundle/' + bundleId);
+      if (!res.ok) { document.getElementById('bfm-files-list').innerHTML = '<div class="empty-state">Ошибка загрузки</div>'; return; }
+      const data = await res.json();
+      renderBfmFiles(data.files || []);
+    } catch(e) {
+      document.getElementById('bfm-files-list').innerHTML = '<div class="empty-state">Ошибка: ' + e.message + '</div>';
+    }
+  }
+
+  function renderBfmFiles(files) {
+    const el = document.getElementById('bfm-files-list');
+    if (!files.length) { el.innerHTML = '<div class="empty-state">В пакете пока нет файлов</div>'; return; }
+    el.innerHTML = files.map(f => `
+      <div class="bfm-file-item" id="bfm-fi-${f.file_id}">
+        <span class="ficon">${fileIcon(f.original_name)}</span>
+        <div class="finfo">
+          <div class="fname" title="${escHtml(f.original_name)}">${escHtml(f.original_name)}</div>
+          <div class="fmeta">${formatSize(f.file_size)}</div>
+        </div>
+        <button class="btn-del" onclick="bfmDeleteFile('${f.file_id}')">🗑 Удалить</button>
+      </div>
+    `).join('');
+  }
+
+  async function bfmDeleteFile(fileId) {
+    const bundleId = document.getElementById('bfm-bundle-id').value;
+    if (!confirm('Удалить файл из пакета?')) return;
+    try {
+      const res = await fetch('/api/qr/bundle/' + bundleId + '/file/' + fileId, { method: 'DELETE', headers: authHeaders() });
+      if (res.status === 401) { doLogout(); return; }
+      if (res.ok) {
+        document.getElementById('bfm-fi-' + fileId)?.remove();
+        const el = document.getElementById('bfm-files-list');
+        if (!el.children.length) el.innerHTML = '<div class="empty-state">В пакете пока нет файлов</div>';
+      } else { const d = await res.json(); alert('Ошибка: ' + (d.detail || res.status)); }
+    } catch(e) { alert('Ошибка: ' + e.message); }
+  }
+
+  function bfmDragOver(e) { e.preventDefault(); document.getElementById('bfm-drop').classList.add('dragover'); }
+  function bfmDragLeave() { document.getElementById('bfm-drop').classList.remove('dragover'); }
+  function bfmDrop(e) { e.preventDefault(); document.getElementById('bfm-drop').classList.remove('dragover'); if (e.dataTransfer.files.length) bfmUploadFiles(e.dataTransfer.files); }
+  function bfmFilesSelected(e) { if (e.target.files.length) bfmUploadFiles(e.target.files); e.target.value = ''; }
+
+  async function bfmUploadFiles(fileList) {
+    const bundleId = document.getElementById('bfm-bundle-id').value;
+    if (!bundleId) return;
+    const statusEl = document.getElementById('bfm-upload-status');
+    const total = fileList.length;
+    let done = 0;
+
+    for (const file of fileList) {
+      statusEl.textContent = `Загружаем ${done + 1} из ${total}: ${file.name}…`;
+      const list = document.getElementById('bfm-files-list');
+      const emptyEl = list.querySelector('.empty-state');
+      if (emptyEl) emptyEl.remove();
+      const tmpId = 'bfm-tmp-' + Date.now();
+      const div = document.createElement('div');
+      div.className = 'bfm-file-item'; div.id = tmpId;
+      div.innerHTML = `<span class="ficon">${fileIcon(file.name)}</span><div class="finfo"><div class="fname">${escHtml(file.name)}</div><div class="fmeta">Загрузка...</div></div>`;
+      list.appendChild(div);
+
+      try {
+        const fd = new FormData(); fd.append('file', file);
+        const res = await fetch('/api/qr/bundle/' + bundleId + '/upload', { method: 'POST', headers: authHeaders(), body: fd });
+        if (res.status === 401) { doLogout(); return; }
+        if (!res.ok) {
+          const d = await res.json();
+          div.remove();
+          statusEl.textContent = 'Ошибка ' + file.name + ': ' + (d.detail || res.status);
+          continue;
+        }
+        const data = await res.json();
+        div.id = 'bfm-fi-' + data.file_id;
+        div.innerHTML = `
+          <span class="ficon">${fileIcon(file.name)}</span>
+          <div class="finfo">
+            <div class="fname" title="${escHtml(file.name)}">${escHtml(file.name)}</div>
+            <div class="fmeta">${formatSize(data.file_size)}</div>
+          </div>
+          <button class="btn-del" onclick="bfmDeleteFile('${data.file_id}')">🗑 Удалить</button>
+        `;
+        done++;
+      } catch(e) {
+        div.remove();
+        statusEl.textContent = 'Ошибка: ' + e.message;
+      }
+    }
+    statusEl.textContent = done === total
+      ? `✓ Добавлено файлов: ${done}`
+      : `Добавлено ${done} из ${total}`;
+  }
+
+  /* ── Edit Bundle ───────────────────────────────────────────────── */
+  function openEditModal(bundleId, name, desc) {
+    document.getElementById('edit-bundle-id').value = bundleId;
+    document.getElementById('edit-bundle-name').value = name;
+    document.getElementById('edit-bundle-desc').value = desc;
+    document.getElementById('edit-bundle-error').style.display = 'none';
+    document.getElementById('edit-bundle-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('edit-bundle-name').focus(), 50);
+  }
+
+  function closeEditModal(e) {
+    if (!e || e.target === document.getElementById('edit-bundle-overlay')) {
+      document.getElementById('edit-bundle-overlay').classList.remove('open');
+    }
+  }
+
+  async function saveEditBundle() {
+    const bundleId = document.getElementById('edit-bundle-id').value;
+    const name = document.getElementById('edit-bundle-name').value.trim();
+    const desc = document.getElementById('edit-bundle-desc').value.trim();
+    const errEl = document.getElementById('edit-bundle-error');
+    const btn = document.getElementById('edit-bundle-save-btn');
+
+    if (!name) { errEl.textContent = 'Название обязательно'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Сохраняем...';
+
+    try {
+      const res = await fetch('/api/qr/bundle/' + bundleId, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc }),
+      });
+      if (res.status === 401) { doLogout(); return; }
+      if (!res.ok) { const d = await res.json(); errEl.textContent = d.detail || 'Ошибка'; errEl.style.display = 'block'; return; }
+
+      document.getElementById('edit-bundle-overlay').classList.remove('open');
+      // Обновляем в списке без перезагрузки
+      const item = document.getElementById('bi-' + bundleId);
+      if (item) {
+        item.querySelector('.bname-li').textContent = name;
+        item.querySelector('.bname-li').title = name;
+      }
+      // Обновляем атрибуты кнопки редактирования
+      const editBtn = item?.querySelector('button[onclick*="openEditModal"]');
+      if (editBtn) {
+        editBtn.setAttribute('onclick', `openEditModal('${bundleId}','${escHtml(name)}','${escHtml(desc)}')`);
+      }
+    } catch(e) {
+      errEl.textContent = 'Ошибка соединения'; errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Сохранить';
+    }
+  }
+</script>
+</body>
+</html>
