@@ -302,12 +302,18 @@ async def delete_instruction(
     if not month or len(month.split("-")) != 2:
         raise HTTPException(400, "Неверный формат месяца. Ожидается YYYY-MM")
     
-    # Безопасная проверка имени файла (без опасных символов)
-    if ".." in filename or "/" in filename or "\\" in filename:
+    # Безопасная проверка имени файла (без path traversal)
+    if "/" in filename or "\\" in filename:
         raise HTTPException(400, "Недопустимое имя файла")
     
     # Формируем путь к файлу
     file_path = STORAGE_BASE / instruction_type / month / filename
+    
+    # Защита от path traversal: убеждаемся что путь остаётся внутри storage
+    try:
+        file_path.resolve().relative_to(STORAGE_BASE.resolve())
+    except ValueError:
+        raise HTTPException(400, "Недопустимое имя файла")
     
     # Проверяем что файл существует
     if not file_path.exists() or not file_path.is_file():
